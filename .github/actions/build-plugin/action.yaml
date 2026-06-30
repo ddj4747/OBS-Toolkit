@@ -27,6 +27,15 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Run macOS Configure Script
+      if: runner.os == 'macOS'
+      shell: zsh --no-rcs --errexit --pipefail {0}
+      working-directory: ${{ inputs.workingDirectory }}
+      run: |
+        : Run macOS Configure Script
+
+        zsh .github/scripts/configure-macos.zsh
+
     - name: Run macOS Build
       if: runner.os == 'macOS'
       shell: zsh --no-rcs --errexit --pipefail {0}
@@ -56,6 +65,15 @@ runs:
         brew install --quiet zsh
         echo ::endgroup::
 
+    - name: Run Ubuntu Configure Script
+      if: runner.os == 'Linux'
+      shell: zsh --no-rcs --errexit --pipefail {0}
+      working-directory: ${{ inputs.workingDirectory }}
+      run: |
+        : Run Ubuntu Configure Script
+
+        zsh .github/scripts/configure-ubuntu.zsh
+
     - name: Run Ubuntu Build
       if: runner.os == 'Linux'
       shell: zsh --no-rcs --errexit --pipefail {0}
@@ -73,9 +91,18 @@ runs:
 
         .github/scripts/build-ubuntu ${build_args}
 
+    - name: Run Windows Configure Script
+      if: runner.os == 'Windows'
+      shell: pwsh
+      working-directory: ${{ inputs.workingDirectory }}
+      run: |
+        # Run Windows Configure Script
+        .github/scripts/Configure-Windows.ps1
+
     - name: Run Windows Build
       if: runner.os == 'Windows'
       shell: pwsh
+      working-directory: ${{ inputs.workingDirectory }}
       run: |
         # Run Windows Build
         if ( $Env:RUNNER_DEBUG -ne $null ) {

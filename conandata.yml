@@ -1,0 +1,4 @@
+requirements:
+  common:
+    - "gtest/1.17.0"
+    - "fmt/12.1.0"
