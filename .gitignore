@@ -163,3 +163,7 @@ vcpkg_out/
 /android/.gradle
 /android/.idea
 /android/local.properties
+
+/obs-portable/
+/__pycache__/
+*.pyc

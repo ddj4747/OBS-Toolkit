@@ -20,6 +20,7 @@ cat > .env <<'EOF'
 DISABLE_DEBUG=true
 BUILD_TESTS=false
 QT_DIR=/usr
+SETUP_PORTABLE_OBS=false
 EOF
 
 python3 configure.py

@@ -36,6 +36,7 @@ if ( [string]::IsNullOrWhiteSpace($qtDir) ) {
 DISABLE_DEBUG=true
 BUILD_TESTS=false
 QT_DIR=$qtDir
+SETUP_PORTABLE_OBS=false
 "@ | Set-Content -Path '.env' -Encoding utf8NoBOM
 
 python configure.py
