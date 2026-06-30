@@ -31,10 +31,6 @@ function(set_target_properties_plugin target)
     OPTIONAL
   )
 
-  if(TARGET plugin-support)
-    target_link_libraries(${target} PRIVATE plugin-support)
-  endif()
-
   add_custom_command(
     TARGET ${target}
     POST_BUILD

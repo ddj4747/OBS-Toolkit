@@ -164,6 +164,7 @@ vcpkg_out/
 /android/.idea
 /android/local.properties
 
+
 /obs-portable/
 /__pycache__/
 *.pyc

@@ -18,17 +18,48 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <obs-module.h>
 #include <plugin-support.h>
+#include <obs-frontend-api.h>
+#include <QMainWindow>
+
+#include <PluginFrontend.h>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
+namespace {
+PluginFrontend *s_frontend = nullptr;
+
+void on_frontend_event(const obs_frontend_event event, void *)
+{
+	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING)
+		return;
+
+	if (s_frontend)
+		return;
+
+	void *main_window = obs_frontend_get_main_window();
+	if (!main_window) {
+		obs_log(LOG_WARNING, "OBS main window is not available");
+		return;
+	}
+
+	s_frontend = new PluginFrontend(static_cast<QMainWindow *>(main_window));
+}
+} // namespace
+
 bool obs_module_load(void)
 {
+	obs_frontend_add_event_callback(on_frontend_event, nullptr);
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;
 }
 
 void obs_module_unload(void)
 {
+	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
+
+	delete s_frontend;
+	s_frontend = nullptr;
+
 	obs_log(LOG_INFO, "plugin unloaded");
 }

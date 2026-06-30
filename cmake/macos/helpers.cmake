@@ -42,10 +42,6 @@ function(set_target_properties_plugin target)
     )
   endif()
 
-  if(TARGET plugin-support)
-    target_link_libraries(${target} PRIVATE plugin-support)
-  endif()
-
   target_install_resources(${target})
 
   add_custom_command(
