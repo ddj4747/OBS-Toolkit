@@ -4,11 +4,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCOPE)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/ENV_Loader.cmake")
 
 project(${_name} VERSION ${_version})
 
-option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" OFF)
-option(ENABLE_QT "Use Qt functionality" OFF)
+option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" ON)
+option(ENABLE_QT "Use Qt functionality" ON)
+
+load_env_file(.env)
+list(APPEND CMAKE_PREFIX_PATH $ENV{QT_DIR}/lib/cmake)
 
 include(compilerconfig)
 include(defaults)

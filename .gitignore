@@ -167,3 +167,4 @@ vcpkg_out/
 /obs-portable/
 /__pycache__/
 *.pyc
+/cmake/.CMakeBuildNumber
