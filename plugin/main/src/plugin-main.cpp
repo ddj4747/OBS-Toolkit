@@ -27,22 +27,14 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
 namespace {
-PluginFrontend *s_frontend = nullptr;
-
 void on_frontend_event(const obs_frontend_event event, void *) {
 	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING)
 		return;
 
-	if (s_frontend)
+	if (PluginFrontend::isRunning())
 		return;
 
-	void *main_window = obs_frontend_get_main_window();
-	if (!main_window) {
-		obs_log(LOG_WARNING, "OBS main window is not available");
-		return;
-	}
-
-	s_frontend = new PluginFrontend(static_cast<QMainWindow *>(main_window));
+	PluginFrontend::start();
 }
 } // namespace
 
@@ -53,10 +45,7 @@ bool obs_module_load(void) {
 }
 
 void obs_module_unload(void) {
+	PluginFrontend::stop();
 	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
-
-	delete s_frontend;
-	s_frontend = nullptr;
-
 	obs_log(LOG_INFO, "plugin unloaded");
 }

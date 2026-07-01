@@ -19,10 +19,24 @@ public:
 
 	PluginFrontend(PluginFrontend &&) = delete;
 
-	void showSourceSelectorWindow();
+	static PluginFrontend *get();
+
+	static void start();
+
+	static void stop();
+
+	static bool isRunning();
+
+	void hideSourceSelectorWindow() const;
+
+	void showSourceSelectorWindow() const;
+
+	void getAddedSources(QList<QString> &sources) const;
 
 private:
+	static PluginFrontend *s_instance;
+
 	QMainWindow *m_window;
 	PluginDock *m_pluginDock;
-	std::unique_ptr<SourceSelectorWindow> m_sourceSelectorWindow;
+	SourceSelectorWindow *m_sourceSelectorWindow;
 };
