@@ -6,6 +6,7 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QListWidget>
+#include <QIcon>
 #include <QPushButton>
 #include <QListWidgetItem>
 #include <obs-frontend-api.h>
@@ -21,7 +22,9 @@ public:
 	void refreshSourceList(const QList<QString> &excludedSources = QList<QString>());
 
 private:
-	bool processSourceCallback(const obs_source_t *source, const QList<QString> *excludedSources);
+	void processSourceCallback(const obs_source_t *source, const QList<QString> *excludedSources) const;
+
+	static QIcon getIconForSource(const obs_source_t *source);
 
 	std::unique_ptr<QVBoxLayout> m_layout;
 	std::unique_ptr<QHBoxLayout> m_buttonLayout;
