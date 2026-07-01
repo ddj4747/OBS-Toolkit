@@ -4,6 +4,8 @@ include_guard(GLOBAL)
 
 include(helpers_common)
 
+set(_MACOS_HELPERS_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 # set_target_properties_obs: Set target properties for use in obs-studio
 function(set_target_properties_plugin target)
   set(options "")
@@ -35,10 +37,10 @@ function(set_target_properties_plugin target)
       XCODE_ATTRIBUTE_INSTALL_PATH "$(USER_LIBRARY_DIR)/Application Support/obs-studio/plugins"
   )
 
-  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos/entitlements.plist")
+  if(EXISTS "${_MACOS_HELPERS_DIR}/entitlements.plist")
     set_target_properties(
       ${target}
-      PROPERTIES XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos/entitlements.plist"
+      PROPERTIES XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${_MACOS_HELPERS_DIR}/entitlements.plist"
     )
   endif()
 
@@ -63,8 +65,12 @@ function(set_target_properties_plugin target)
   install(TARGETS ${target} LIBRARY DESTINATION .)
   install(FILES "$<TARGET_BUNDLE_DIR:${target}>.dsym" CONFIGURATIONS Release DESTINATION . OPTIONAL)
 
-  configure_file(cmake/macos/resources/distribution.in "${CMAKE_CURRENT_BINARY_DIR}/distribution" @ONLY)
-  configure_file(cmake/macos/resources/create-package.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/create-package.cmake" @ONLY)
+  configure_file("${_MACOS_HELPERS_DIR}/resources/distribution.in" "${CMAKE_CURRENT_BINARY_DIR}/distribution" @ONLY)
+  configure_file(
+    "${_MACOS_HELPERS_DIR}/resources/create-package.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/create-package.cmake"
+    @ONLY
+  )
   install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/create-package.cmake")
 endfunction()
 

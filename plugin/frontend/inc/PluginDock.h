@@ -12,4 +12,6 @@ public:
 	explicit PluginDock(QWidget *parent);
 
 	~PluginDock() override;
+
+	PluginDock(const PluginDock &) = delete;
 };

@@ -4,6 +4,8 @@ include_guard(GLOBAL)
 
 include(helpers_common)
 
+set(_WINDOWS_HELPERS_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 # set_target_properties_plugin: Set target properties for use in obs-studio
 function(set_target_properties_plugin target)
   set(options "")
@@ -50,7 +52,10 @@ function(set_target_properties_plugin target)
   list(FILTER target_ui_files INCLUDE REGEX ".+\\.(ui|qrc)")
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "UI Files" FILES ${target_ui_files})
 
-  configure_file(cmake/windows/resources/resource.rc.in "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.rc")
+  configure_file(
+    "${_WINDOWS_HELPERS_DIR}/resources/resource.rc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.rc"
+  )
   target_sources(${CMAKE_PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.rc")
 endfunction()
 

@@ -169,3 +169,4 @@ vcpkg_out/
 /__pycache__/
 *.pyc
 /cmake/.CMakeBuildNumber
+/build_*

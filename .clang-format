@@ -1,5 +1,6 @@
-# please use clang-format version 16 or later
+# please use clang-format version 22 or later
 
+Language: Cpp
 Standard: c++20
 AccessModifierOffset: -8
 AlignAfterOpenBracket: Align
@@ -9,44 +10,26 @@ AlignEscapedNewlines: Left
 AlignOperands: true
 AlignTrailingComments: true
 AllowAllArgumentsOnNextLine: false
-AllowAllConstructorInitializersOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortBlocksOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: Never
 AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: false
-AlwaysBreakAfterDefinitionReturnType: None
-AlwaysBreakAfterReturnType: None
+BreakAfterReturnType: Automatic
 AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: false
+BreakTemplateDeclarations: No
 BinPackArguments: true
 BinPackParameters: true
-BraceWrapping:
-  AfterClass: false
-  AfterControlStatement: false
-  AfterEnum: false
-  AfterFunction: true
-  AfterNamespace: false
-  AfterObjCDeclaration: false
-  AfterStruct: false
-  AfterUnion: false
-  AfterExternBlock: false
-  BeforeCatch: false
-  BeforeElse: false
-  IndentBraces: false
-  SplitEmptyFunction: true
-  SplitEmptyRecord: true
-  SplitEmptyNamespace: true
 BreakBeforeBinaryOperators: None
-BreakBeforeBraces: Custom
+BreakBeforeBraces: Attach
 BreakBeforeTernaryOperators: true
 BreakConstructorInitializers: BeforeColon
 BreakStringLiterals: false  # apparently unpredictable
 ColumnLimit: 120
 CompactNamespaces: false
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
+PackConstructorInitializers: CurrentLine
 ConstructorInitializerIndentWidth: 8
 ContinuationIndentWidth: 8
 Cpp11BracedListStyle: true
@@ -92,12 +75,10 @@ SpaceBeforeCtorInitializerColon: true
 SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
 SpaceBeforeRangeBasedForLoopColon: true
-SpaceInEmptyParentheses: false
 SpacesBeforeTrailingComments: 1
-SpacesInAngles: false
-SpacesInCStyleCastParentheses: false
+SpacesInAngles: Never
 SpacesInContainerLiterals: false
-SpacesInParentheses: false
+SpacesInParens: Never
 SpacesInSquareBrackets: false
 StatementMacros:
   - 'Q_OBJECT'
@@ -107,103 +88,89 @@ TypenameMacros:
 UseTab: ForContinuationAndIndentation
 ---
 Language: ObjC
-AccessModifierOffset: 2
-AlignArrayOfStructures: Right
-AlignConsecutiveAssignments: None
-AlignConsecutiveBitFields: None
-AlignConsecutiveDeclarations: None
-AlignConsecutiveMacros:
-  Enabled: true
-  AcrossEmptyLines: false
-  AcrossComments: true
+Standard: c++20
+AccessModifierOffset: -8
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlines: Left
+AlignOperands: true
+AlignTrailingComments: true
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortBlocksOnASingleLine: Never
-AllowShortEnumsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
 AllowShortIfStatementsOnASingleLine: Never
-AllowShortLambdasOnASingleLine: None
-AttributeMacros: [ '__unused', '__autoreleasing', '_Nonnull', '__bridge' ]
-BitFieldColonSpacing: Both
-#BreakBeforeBraces: Webkit
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: true
-  AfterControlStatement: Never
-  AfterEnum: false
-  AfterFunction: true
-  AfterNamespace: false
-  AfterObjCDeclaration: false
-  AfterStruct: false
-  AfterUnion: false
-  AfterExternBlock: false
-  BeforeCatch: false
-  BeforeElse: false
-  BeforeLambdaBody: false
-  BeforeWhile: false
-  IndentBraces: false
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: true
-BreakAfterAttributes: Never
-BreakArrays: false
-BreakBeforeConceptDeclarations: Allowed
-BreakBeforeInlineASMColon: OnlyMultiline
-BreakConstructorInitializers: AfterColon
-BreakInheritanceList: AfterComma
+AllowShortLambdasOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: false
+BreakAfterReturnType: Automatic
+AlwaysBreakBeforeMultilineStrings: false
+BreakTemplateDeclarations: No
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Attach
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeColon
+BreakStringLiterals: false  # apparently unpredictable
 ColumnLimit: 120
-ConstructorInitializerIndentWidth: 4
-ContinuationIndentWidth: 4
-EmptyLineAfterAccessModifier: Never
-EmptyLineBeforeAccessModifier: LogicalBlock
-ExperimentalAutoDetectBinPacking: false
+CompactNamespaces: false
+PackConstructorInitializers: CurrentLine
+ConstructorInitializerIndentWidth: 8
+ContinuationIndentWidth: 8
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+DisableFormat: false
 FixNamespaceComments: true
-IndentAccessModifiers: false
-IndentCaseBlocks: false
-IndentCaseLabels: true
-IndentExternBlock: Indent
-IndentGotoLabels: false
-IndentRequiresClause: true
-IndentWidth: 4
-IndentWrappedFunctionNames: true
-InsertBraces: false
-InsertNewlineAtEOF: true
-KeepEmptyLinesAtTheStartOfBlocks: false
-LambdaBodyIndentation: Signature
-NamespaceIndentation: All
+ForEachMacros:
+  - 'json_object_foreach'
+  - 'json_object_foreach_safe'
+  - 'json_array_foreach'
+  - 'HASH_ITER'
+IncludeBlocks: Preserve
+IndentCaseLabels: false
+IndentPPDirectives: None
+IndentWidth: 8
+IndentWrappedFunctionNames: false
+KeepEmptyLinesAtTheStartOfBlocks: true
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
 ObjCBinPackProtocolList: Auto
-ObjCBlockIndentWidth: 4
-ObjCBreakBeforeNestedBlockParam: false
+ObjCBlockIndentWidth: 8
 ObjCSpaceAfterProperty: true
 ObjCSpaceBeforeProtocolList: true
-PPIndentWidth: -1
-PackConstructorInitializers: NextLine
-QualifierAlignment: Leave
-ReferenceAlignment: Right
-RemoveSemicolon: false
-RequiresClausePosition: WithPreceding
-RequiresExpressionIndentation: OuterScope
-SeparateDefinitionBlocks: Leave
-ShortNamespaceLines: 1
+AttributeMacros: [ '__unused', '__autoreleasing', '_Nonnull', '__bridge' ]
+
+PenaltyBreakAssignment: 10
+PenaltyBreakBeforeFirstCallParameter: 30
+PenaltyBreakComment: 10
+PenaltyBreakFirstLessLess: 0
+PenaltyBreakString: 10
+PenaltyExcessCharacter: 100
+PenaltyReturnTypeOnItsOwnLine: 60
+
+PointerAlignment: Right
+ReflowComments: false
+SkipMacroDefinitionBody: true
 SortIncludes: false
-#SortUsingDeclarations: LexicographicNumeric
-SortUsingDeclarations: true
-SpaceAfterCStyleCast: true
+SortUsingDeclarations: false
+SpaceAfterCStyleCast: false
 SpaceAfterLogicalNot: false
-SpaceAroundPointerQualifiers: Default
-SpaceBeforeCaseColon: false
-SpaceBeforeCpp11BracedList: true
+SpaceAfterTemplateKeyword: false
+SpaceBeforeAssignmentOperators: true
 SpaceBeforeCtorInitializerColon: true
 SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
 SpaceBeforeRangeBasedForLoopColon: true
-SpaceBeforeSquareBrackets: false
-SpaceInEmptyBlock: false
-SpaceInEmptyParentheses: false
-SpacesBeforeTrailingComments: 2
-SpacesInConditionalStatement: false
-SpacesInLineCommentPrefix:
-  Minimum: 1
-  Maximum: -1
-Standard: c++20
-TabWidth: 4
-UseTab: Never
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: Never
+SpacesInContainerLiterals: false
+SpacesInParens: Never
+SpacesInSquareBrackets: false
+StatementMacros:
+  - 'Q_OBJECT'
+TabWidth: 8
+TypenameMacros:
+  - 'DARRAY'
+UseTab: ForContinuationAndIndentation

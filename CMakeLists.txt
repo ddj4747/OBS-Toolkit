@@ -9,11 +9,12 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/ENV_Loader.cmake")
 project(${_name} VERSION ${_version})
 
 load_env_file(.env)
-list(APPEND CMAKE_PREFIX_PATH $ENV{QT_DIR}/lib/cmake)
 
 include(compilerconfig)
 include(defaults)
 include(helpers)
+
+list(APPEND CMAKE_PREFIX_PATH $ENV{QT_DIR}/lib/cmake)
 
 find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)

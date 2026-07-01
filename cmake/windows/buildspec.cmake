@@ -19,6 +19,7 @@ function(_check_dependencies_windows)
   set(dependencies_list prebuilt qt6 obs-studio)
 
   _check_dependencies()
+  set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} PARENT_SCOPE)
 endfunction()
 
 _check_dependencies_windows()
