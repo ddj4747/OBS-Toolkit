@@ -19,7 +19,10 @@ public:
 
 	PluginFrontend(PluginFrontend &&) = delete;
 
+	void showSourceSelectorWindow();
+
 private:
 	QMainWindow *m_window;
 	PluginDock *m_pluginDock;
+	std::unique_ptr<SourceSelectorWindow> m_sourceSelectorWindow;
 };

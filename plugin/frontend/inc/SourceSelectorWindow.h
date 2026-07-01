@@ -1,0 +1,31 @@
+#pragma once
+
+#include <QWidget>
+#include <QVBoxLayout>
+#include <QLabel>
+#include <QScrollArea>
+#include <QVBoxLayout>
+#include <QListWidget>
+#include <QPushButton>
+#include <QListWidgetItem>
+#include <obs-frontend-api.h>
+#include <QShowEvent>
+
+class SourceSelectorWindow final : public QWidget {
+	Q_OBJECT
+public:
+	SourceSelectorWindow() = delete;
+
+	explicit SourceSelectorWindow(QWidget *parent);
+
+	void refreshSourceList(const QList<QString> &excludedSources = QList<QString>());
+
+private:
+	bool processSourceCallback(const obs_source_t *source, const QList<QString> *excludedSources);
+
+	std::unique_ptr<QVBoxLayout> m_layout;
+	std::unique_ptr<QHBoxLayout> m_buttonLayout;
+	std::unique_ptr<QListWidget> m_listWidget;
+	std::unique_ptr<QPushButton> m_addButton;
+	std::unique_ptr<QPushButton> m_cancelButton;
+};

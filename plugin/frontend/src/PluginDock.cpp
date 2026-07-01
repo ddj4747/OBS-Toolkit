@@ -1,6 +1,6 @@
 #include <PluginDock.h>
+#include <SourceSelectorWindow.h>
 #include <plugin-support.h>
-#include <obs-frontend-api.h>
 
 namespace {
 const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
@@ -14,3 +14,7 @@ PluginDock::PluginDock(QWidget *parent) : QWidget(parent) {
 }
 
 PluginDock::~PluginDock() = default;
+
+void PluginDock::getSourcesList(QList<QString> &sources) {
+	sources.clear();
+}
