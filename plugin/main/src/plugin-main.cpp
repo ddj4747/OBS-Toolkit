@@ -21,6 +21,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <obs-frontend-api.h>
 #include <QMainWindow>
 
+#include <EventManager.h>
 #include <PluginFrontend.h>
 
 OBS_DECLARE_MODULE()
@@ -46,6 +47,7 @@ bool obs_module_load(void) {
 
 void obs_module_unload(void) {
 	PluginFrontend::stop();
+	EventManager::destroy();
 	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
 	obs_log(LOG_INFO, "plugin unloaded");
 }

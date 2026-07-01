@@ -1,16 +1,10 @@
 #pragma once
 
-#include <QWidget>
 #include <QVBoxLayout>
-#include <QLabel>
-#include <QScrollArea>
-#include <QVBoxLayout>
-#include <QListWidget>
 #include <QIcon>
 #include <QPushButton>
 #include <QListWidgetItem>
 #include <obs-frontend-api.h>
-#include <QShowEvent>
 #include <QCloseEvent>
 
 class SourceSelectorWindow final : public QWidget {
