@@ -1,13 +1,18 @@
 #include <SourceSelectorWindow.h>
+
+#include <PluginFrontend.h>
+#include <obs-helpers.h>
 #include <plugin-support.h>
+#include <FrontendEvents.h>
+#include <EventManager.h>
 
 SourceSelectorWindow::SourceSelectorWindow(QWidget *parent)
 	: QWidget(parent, Qt::Window),
 	  m_layout(new QVBoxLayout()),
 	  m_buttonLayout(new QHBoxLayout()),
 	  m_listWidget(new QListWidget(this)),
-	  m_addButton(new QPushButton("Add")),
-	  m_cancelButton(new QPushButton("Cancel")) {
+	  m_addButton(new QPushButton("Add", this)),
+	  m_cancelButton(new QPushButton("Cancel", this)) {
 
 	setWindowTitle(QString(PLUGIN_NAME) + " - Source Selector");
 	m_listWidget->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -19,24 +24,29 @@ SourceSelectorWindow::SourceSelectorWindow(QWidget *parent)
 	m_buttonLayout->addWidget(m_addButton);
 	m_buttonLayout->addWidget(m_cancelButton);
 
+	connect(m_addButton, &QPushButton::clicked, this, &SourceSelectorWindow::onAddButtonClicked);
+	connect(m_cancelButton, &QPushButton::clicked, this, &SourceSelectorWindow::onCancelButtonClicked);
+
 	setLayout(m_layout);
+
+	EventManager::get()->addFrontendEventListener(this);
 }
 
 SourceSelectorWindow::~SourceSelectorWindow() {
-	if (!isHidden()) {
-		signal_handler_t *handler = obs_get_signal_handler();
-		if (handler) {
-			signal_handler_disconnect(handler, "source_create", onSourceListChange, this);
-			signal_handler_disconnect(handler, "source_destroy", onSourceListChange, this);
-		}
+	EventManager::get()->removeFrontendEventListener(this);
+
+	if (isHidden()) {
+		return;
 	}
+
+	obs_helpers::disconnectSourceEditSignals(m_sourceModificationSignalKey);
 }
 
 void SourceSelectorWindow::refreshSourceList(const QList<QString> &excludedSources) {
 	m_listWidget->clear();
 
 	// ReSharper disable once CppLocalVariableMayBeConst
-	uint64_t ptrTable[2]{reinterpret_cast<uint64_t>(this), reinterpret_cast<uint64_t>(&excludedSources)};
+	size_t ptrTable[2]{reinterpret_cast<size_t>(this), reinterpret_cast<size_t>(&excludedSources)};
 
 	obs_enum_sources(
 		// ReSharper disable once CppParameterMayBeConstPtrOrRef
@@ -57,51 +67,14 @@ void SourceSelectorWindow::refreshSourceList(const QList<QString> &excludedSourc
 	}
 }
 
-QIcon SourceSelectorWindow::getIconForSource(const obs_source_t *source) {
-	const char *id = obs_source_get_id(source);
-	const obs_icon_type type = obs_source_get_icon_type(id);
-	const QWidget *mainWindow = static_cast<QWidget *>(obs_frontend_get_main_window());
-
-	if (!mainWindow) {
-		static bool logged = false;
-		if (!logged) {
-			obs_log(LOG_WARNING, "main window unavailable, source icons will not be shown");
-			logged = true;
-		}
-		return {};
+bool SourceSelectorWindow::event(QEvent *event) {
+	if (event->type() == SourceRemovedEvent::type) {
+		const QList<QString> sources = PluginFrontend::isRunning() ? PluginFrontend::get()->getAddedSources()
+									   : QList<QString>{};
+		refreshSourceList(sources);
 	}
 
-	switch (type) {
-	case OBS_ICON_TYPE_IMAGE:
-		return mainWindow->property("imageIcon").value<QIcon>();
-	case OBS_ICON_TYPE_COLOR:
-		return mainWindow->property("colorIcon").value<QIcon>();
-	case OBS_ICON_TYPE_SLIDESHOW:
-		return mainWindow->property("slideshowIcon").value<QIcon>();
-	case OBS_ICON_TYPE_AUDIO_INPUT:
-		return mainWindow->property("audioInputIcon").value<QIcon>();
-	case OBS_ICON_TYPE_AUDIO_OUTPUT:
-		return mainWindow->property("audioOutputIcon").value<QIcon>();
-	case OBS_ICON_TYPE_PROCESS_AUDIO_OUTPUT:
-		return mainWindow->property("audioProcessOutputIcon").value<QIcon>();
-	case OBS_ICON_TYPE_DESKTOP_CAPTURE:
-		return mainWindow->property("desktopCapIcon").value<QIcon>();
-	case OBS_ICON_TYPE_WINDOW_CAPTURE:
-		return mainWindow->property("windowCapIcon").value<QIcon>();
-	case OBS_ICON_TYPE_GAME_CAPTURE:
-		return mainWindow->property("gameCapIcon").value<QIcon>();
-	case OBS_ICON_TYPE_CAMERA:
-		return mainWindow->property("cameraIcon").value<QIcon>();
-	case OBS_ICON_TYPE_TEXT:
-		return mainWindow->property("textIcon").value<QIcon>();
-	case OBS_ICON_TYPE_MEDIA:
-		return mainWindow->property("mediaIcon").value<QIcon>();
-	case OBS_ICON_TYPE_BROWSER:
-		return mainWindow->property("browserIcon").value<QIcon>();
-	case OBS_ICON_TYPE_UNKNOWN:
-	default:
-		return mainWindow->property("defaultIcon").value<QIcon>();
-	}
+	return QWidget::event(event);
 }
 
 void SourceSelectorWindow::processSourceCallback(const obs_source_t *source,
@@ -115,50 +88,44 @@ void SourceSelectorWindow::processSourceCallback(const obs_source_t *source,
 		return;
 	}
 
-	const QIcon icon = getIconForSource(source);
+	const QIcon icon = obs_helpers::getIconFromSource(source);
 	new QListWidgetItem(icon, name, m_listWidget);
 }
 
-// ReSharper disable once CppParameterMayBeConstPtrOrRef
-void SourceSelectorWindow::onSourceListChange(void *data, calldata_t *cd) {
-	SourceSelectorWindow *self = static_cast<SourceSelectorWindow *>(data);
-	const obs_source_t *source = static_cast<obs_source_t *>(calldata_ptr(cd, "source"));
-
-	if (!self || !source) {
-		obs_log(LOG_WARNING, "source list change ignored: invalid callback data");
-		return;
-	}
-
-	if (obs_source_removed(source)) {
-		obs_log(LOG_INFO, "source removed: '%s' (%s), refreshing list", obs_source_get_name(source),
-			obs_source_get_id(source));
-	} else {
-		obs_log(LOG_INFO, "source created: '%s' (%s), refreshing list", obs_source_get_name(source),
-			obs_source_get_id(source));
-	}
-
-	self->refreshSourceList();
-}
-
 void SourceSelectorWindow::showEvent(QShowEvent *event) {
-	refreshSourceList();
+	const QList<QString> excludedSources = PluginFrontend::isRunning() ? PluginFrontend::get()->getAddedSources()
+									   : QList<QString>{};
+	refreshSourceList(excludedSources);
 	obs_log(LOG_INFO, "source selector opened with %d sources", m_listWidget->count());
 
-	signal_handler_t *handler = obs_get_signal_handler();
-	if (handler) {
-		signal_handler_connect(handler, "source_create", onSourceListChange, this);
-		signal_handler_connect(handler, "source_destroy", onSourceListChange, this);
-	}
+	m_sourceModificationSignalKey = obs_helpers::connectSourceEditSignals([this](calldata_t *) {
+		const QList<QString> sources = PluginFrontend::isRunning() ? PluginFrontend::get()->getAddedSources()
+									   : QList<QString>{};
+		refreshSourceList(sources);
+	});
 
 	QWidget::showEvent(event);
 }
 
 void SourceSelectorWindow::hideEvent(QHideEvent *event) {
 	QWidget::hideEvent(event);
+	obs_helpers::disconnectSourceEditSignals(m_sourceModificationSignalKey);
+}
 
-	signal_handler_t *handler = obs_get_signal_handler();
-	if (handler) {
-		signal_handler_disconnect(handler, "source_create", onSourceListChange, this);
-		signal_handler_disconnect(handler, "source_destroy", onSourceListChange, this);
+void SourceSelectorWindow::onAddButtonClicked() {
+	const QList<QListWidgetItem *> selected = m_listWidget->selectedItems();
+	QList<QString> names(selected.size());
+
+	for (qsizetype i = 0; i < selected.size(); ++i) {
+		names[i] = selected[i]->text();
 	}
+
+	QEvent *event = new SourceAddedEvent(names);
+	EventManager::get()->sendFrontendEvent(event);
+
+	hide();
+}
+
+void SourceSelectorWindow::onCancelButtonClicked() {
+	hide();
 }

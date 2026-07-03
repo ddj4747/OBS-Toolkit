@@ -31,6 +31,34 @@ void EventManager::addBackendEventListener(const QPointer<QObject> &listener) {
 	m_backendObjects.push_back(listener);
 }
 
+void EventManager::removeFrontendEventListener(const QPointer<QObject> &listener) {
+	std::lock_guard<std::mutex> lock(s_mutex);
+	auto it = m_frontendObjects.begin();
+
+	while (it != m_frontendObjects.end()) {
+		if (*it == listener) {
+			m_frontendObjects.erase(it);
+			return;
+		}
+
+		++it;
+	}
+}
+
+void EventManager::removeBackendEventListener(const QPointer<QObject> &listener) {
+	std::lock_guard<std::mutex> lock(s_mutex);
+	auto it = m_backendObjects.begin();
+
+	while (it != m_backendObjects.end()) {
+		if (*it == listener) {
+			m_backendObjects.erase(it);
+			return;
+		}
+
+		++it;
+	}
+}
+
 void EventManager::sendFrontendEvent(QEvent *event) {
 	sendEvent(m_frontendObjects, event, true);
 }

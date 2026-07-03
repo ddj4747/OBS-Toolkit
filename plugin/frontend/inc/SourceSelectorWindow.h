@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QVBoxLayout>
-#include <QIcon>
 #include <QPushButton>
 #include <QListWidgetItem>
 #include <obs-frontend-api.h>
@@ -14,7 +13,7 @@ public:
 
 	explicit SourceSelectorWindow(QWidget *parent);
 
-	~SourceSelectorWindow();
+	~SourceSelectorWindow() override;
 
 	SourceSelectorWindow(const SourceSelectorWindow &) = delete;
 
@@ -27,17 +26,20 @@ public:
 	void refreshSourceList(const QList<QString> &excludedSources = QList<QString>());
 
 protected:
+	bool event(QEvent *event) override;
+
 	void showEvent(QShowEvent *event) override;
 
 	void hideEvent(QHideEvent *event) override;
 
+private slots:
+	void onAddButtonClicked();
+	void onCancelButtonClicked();
+
 private:
 	void processSourceCallback(const obs_source_t *source, const QList<QString> *excludedSources) const;
 
-	static void onSourceListChange(void *data, calldata_t *cd);
-
-	static QIcon getIconForSource(const obs_source_t *source);
-
+	uint64_t m_sourceModificationSignalKey = 0;
 	QVBoxLayout *m_layout;
 	QHBoxLayout *m_buttonLayout;
 	QListWidget *m_listWidget;

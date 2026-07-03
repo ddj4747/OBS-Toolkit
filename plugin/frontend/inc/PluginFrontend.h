@@ -2,6 +2,11 @@
 
 #include <QMainWindow>
 #include <PluginDock.h>
+#include <SourceSelectorWindow.h>
+
+#ifndef NO_DISCARD
+#define NO_DISCARD [[nodiscard]]
+#endif
 
 class PluginFrontend final {
 public:
@@ -31,12 +36,11 @@ public:
 
 	void showSourceSelectorWindow() const;
 
-	void getAddedSources(QList<QString> &sources) const;
+	NO_DISCARD const QList<QString> &getAddedSources() const;
 
 private:
 	static PluginFrontend *s_instance;
 
-	QMainWindow *m_window;
 	PluginDock *m_pluginDock;
 	SourceSelectorWindow *m_sourceSelectorWindow;
 };

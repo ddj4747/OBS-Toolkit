@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QObject>
 #include <QPointer>
 #include <QEvent>
 #include <vector>
@@ -16,6 +15,8 @@ public:
 
 	void addFrontendEventListener(const QPointer<QObject> &listener);
 	void addBackendEventListener(const QPointer<QObject> &listener);
+	void removeFrontendEventListener(const QPointer<QObject> &listener);
+	void removeBackendEventListener(const QPointer<QObject> &listener);
 	void sendFrontendEvent(QEvent *event);
 	void sendBackendEvent(QEvent *event);
 	void sendGlobalEvent(QEvent *event);

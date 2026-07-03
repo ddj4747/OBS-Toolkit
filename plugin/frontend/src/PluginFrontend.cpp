@@ -37,14 +37,22 @@ bool PluginFrontend::isRunning() {
 	return s_instance;
 }
 
-PluginFrontend::PluginFrontend(QMainWindow *window) : m_window(window) {
-	m_pluginDock = new PluginDock(m_window);
-	m_sourceSelectorWindow = new SourceSelectorWindow(m_window);
-
-	showSourceSelectorWindow();
+PluginFrontend::PluginFrontend(QMainWindow *window) {
+	m_pluginDock = new PluginDock(window);
+	m_sourceSelectorWindow = new SourceSelectorWindow(window);
 }
 
-PluginFrontend::~PluginFrontend() = default;
+PluginFrontend::~PluginFrontend() {
+	if (m_sourceSelectorWindow) {
+		m_sourceSelectorWindow->hide();
+		delete m_sourceSelectorWindow;
+		m_sourceSelectorWindow = nullptr;
+	}
+	if (m_pluginDock) {
+		delete m_pluginDock;
+		m_pluginDock = nullptr;
+	}
+}
 
 void PluginFrontend::hideSourceSelectorWindow() const {
 	if (!m_sourceSelectorWindow->isVisible()) {
@@ -59,10 +67,9 @@ void PluginFrontend::showSourceSelectorWindow() const {
 		return;
 	}
 
-	m_sourceSelectorWindow->refreshSourceList();
 	m_sourceSelectorWindow->show();
 }
 
-void PluginFrontend::getAddedSources(QList<QString> &sources) const {
-	m_pluginDock->getSourcesList(sources);
+const QList<QString> &PluginFrontend::getAddedSources() const {
+	return m_pluginDock->getSourcesList();
 }
