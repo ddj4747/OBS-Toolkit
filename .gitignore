@@ -170,3 +170,4 @@ vcpkg_out/
 *.pyc
 /cmake/.CMakeBuildNumber
 /build_*
+/.deps

@@ -4,9 +4,14 @@ include_guard(GLOBAL)
 
 include(buildspec_common)
 
-# _check_dependencies_windows: Set up Windows slice for _check_dependencies
 function(_check_dependencies_windows)
-  set(arch ${CMAKE_VS_PLATFORM_NAME})
+  if(CMAKE_VS_PLATFORM_NAME)
+    set(arch ${CMAKE_VS_PLATFORM_NAME})
+  elseif(CMAKE_GENERATOR_PLATFORM)
+    set(arch ${CMAKE_GENERATOR_PLATFORM})
+  else()
+    set(arch x64)
+  endif()
   set(platform windows-${arch})
 
   set(dependencies_dir "${CMAKE_CURRENT_SOURCE_DIR}/.deps")

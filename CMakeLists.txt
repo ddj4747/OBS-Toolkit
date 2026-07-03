@@ -38,17 +38,18 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
   message(STATUS "OBS Location passed from Conan: ${USER_PLUGIN_OBS_LOCATION}")
 
   if(WIN32)
-    set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}/bin/64bit/obs64.exe")
-    set(OBS_PLUGIN_DEST "${USER_PLUGIN_OBS_LOCATION}/obs-plugins/64bit")
+    set(OBS_PROGRAM_PATH ${USER_PLUGIN_OBS_LOCATION}\\bin\\64bit\\obs64.exe)
+    set(OBS_PLUGIN_DEST ${USER_PLUGIN_OBS_LOCATION}/obs-plugins/64bit)
+    set(OBS_PLUGIN_DATA_DEST ${USER_PLUGIN_OBS_LOCATION}/data/obs-plugins/${CMAKE_PROJECT_NAME})
 
     add_custom_target(
-      run
-      COMMAND taskkill /F /IM obs64.exe || exit 0
-      COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
-      COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
-      COMMAND start "" "${OBS_PROGRAM_PATH}"
-      COMMENT "Deploying plugin and launching OBS..."
-      DEPENDS ${CMAKE_PROJECT_NAME}
+            run
+            COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
+            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
+            COMMAND start "" "${OBS_PROGRAM_PATH}"
+            COMMENT ${OBS_PROGRAM_PATH}
+            DEPENDS ${CMAKE_PROJECT_NAME}
     )
   elseif(APPLE)
     set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}/OBS.app/Contents/MacOS/OBS")

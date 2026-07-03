@@ -2,7 +2,6 @@
 
 include_guard(GLOBAL)
 
-# _check_deps_version: Checks for obs-deps VERSION file in prefix paths
 function(_check_deps_version version)
   set(found FALSE)
 
@@ -53,9 +52,15 @@ function(_setup_obs_studio)
   endif()
 
   if(OS_WINDOWS)
-    set(_cmake_generator "${CMAKE_GENERATOR}")
-    set(_cmake_arch "-A ${arch},version=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
-    set(_cmake_extra "-DCMAKE_SYSTEM_VERSION=${CMAKE_SYSTEM_VERSION} -DCMAKE_ENABLE_SCRIPTING=OFF")
+    if(CMAKE_GENERATOR MATCHES "Visual Studio")
+      set(_cmake_generator "${CMAKE_GENERATOR}")
+      set(_cmake_sdk_version "${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
+    else()
+      set(_cmake_generator "Visual Studio 17 2022")
+      set(_cmake_sdk_version "${OBS_WINDOWS_SDK_VERSION}")
+    endif()
+    set(_cmake_arch "-A ${arch},version=${_cmake_sdk_version}")
+    set(_cmake_extra "-DCMAKE_SYSTEM_VERSION=${_cmake_sdk_version} -DCMAKE_ENABLE_SCRIPTING=OFF")
   elseif(OS_MACOS)
     set(_cmake_generator "Xcode")
     set(_cmake_arch "-DCMAKE_OSX_ARCHITECTURES:STRING='arm64;x86_64'")
