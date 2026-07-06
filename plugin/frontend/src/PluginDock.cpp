@@ -6,6 +6,7 @@
 #include <plugin-support.h>
 #include <QFrame>
 #include <QMainWindow>
+#include <QItemSelectionModel>
 #include <util/config-file.h>
 
 namespace {
@@ -44,12 +45,22 @@ PluginDock::PluginDock(QWidget *parent)
 						    "Remove Selected Sources", this,
 						    &PluginDock::onRemoveSourceClicked);
 
-	m_removeSourceAction->setEnabled(false);
-
 	m_toolbar->addSeparator();
 
 	m_settingsAction = m_toolbar->addAction(obs_helpers::getIconFromPath("settings/general.svg"), "Settings", this,
 						&PluginDock::onSettingsClicked);
+
+	m_toolbar->addSeparator();
+
+	m_moveUpSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("up.svg"), "Move Source Upward", this,
+						    &PluginDock::onMoveUpSourceClicked);
+
+	m_moveDownSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("down.svg"), "Move Source Downward",
+						      this, &PluginDock::onMoveDownSourceClicked);
+
+	m_removeSourceAction->setEnabled(false);
+	m_moveDownSourceAction->setEnabled(false);
+	m_moveUpSourceAction->setEnabled(false);
 
 	m_sourcesListWidget->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	m_sourcesListWidget->setIconSize(QSize(18, 18));
@@ -260,4 +271,70 @@ void PluginDock::onRemoveSourceClicked() {
 void PluginDock::onSourcesListSelectionChanged() const {
 	const QList<QListWidgetItem *> selected = m_sourcesListWidget->selectedItems();
 	m_removeSourceAction->setEnabled(!selected.empty());
+	m_moveDownSourceAction->setEnabled(!selected.empty());
+	m_moveUpSourceAction->setEnabled(!selected.empty());
+}
+
+void PluginDock::onMoveDownSourceClicked() {
+	const QList<QListWidgetItem *> selected = m_sourcesListWidget->selectedItems();
+	if (selected.isEmpty()) {
+		return;
+	}
+
+	QList<QString> selectedNames;
+	selectedNames.reserve(selected.size());
+	for (const QListWidgetItem *item : selected) {
+		selectedNames.append(item->text());
+	}
+
+	for (const QString &name : selectedNames) {
+		const qsizetype index = m_sourcesList.indexOf(name);
+		if (index < 0 || index >= m_sourcesList.size() - 1) {
+			continue;
+		}
+
+		m_sourcesList.swapItemsAt(index, index + 1);
+		break;
+	}
+
+	updateSourcesList();
+
+	for (const QString &name : selectedNames) {
+		const int index = m_sourcesList.indexOf(name);
+		if (index >= 0) {
+			m_sourcesListWidget->setCurrentRow(index, QItemSelectionModel::Select);
+		}
+	}
+}
+
+void PluginDock::onMoveUpSourceClicked() {
+	const QList<QListWidgetItem *> selected = m_sourcesListWidget->selectedItems();
+	if (selected.isEmpty()) {
+		return;
+	}
+
+	QList<QString> selectedNames;
+	selectedNames.reserve(selected.size());
+	for (const QListWidgetItem *item : selected) {
+		selectedNames.append(item->text());
+	}
+
+	for (const QString &name : selectedNames) {
+		const qsizetype index = m_sourcesList.indexOf(name);
+		if (index <= 0) {
+			continue;
+		}
+
+		m_sourcesList.swapItemsAt(index, index - 1);
+		break;
+	}
+
+	updateSourcesList();
+
+	for (const QString &name : selectedNames) {
+		const int index = m_sourcesList.indexOf(name);
+		if (index >= 0) {
+			m_sourcesListWidget->setCurrentRow(index, QItemSelectionModel::Select);
+		}
+	}
 }

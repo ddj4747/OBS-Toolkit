@@ -36,6 +36,8 @@ private slots:
 	static void onAddSourceClicked();
 	void onRemoveSourceClicked();
 	void onSourcesListSelectionChanged() const;
+	void onMoveUpSourceClicked();
+	void onMoveDownSourceClicked();
 
 private:
 	void syncTrackedSourceNames(const calldata_t *cd);
@@ -53,7 +55,10 @@ private:
 	QVBoxLayout *m_layout;
 	QListWidget *m_sourcesListWidget;
 	QToolBar *m_toolbar;
+
 	QAction *m_settingsAction{nullptr};
 	QAction *m_addSourceAction{nullptr};
 	QAction *m_removeSourceAction{nullptr};
+	QAction *m_moveUpSourceAction{nullptr};
+	QAction *m_moveDownSourceAction{nullptr};
 };
