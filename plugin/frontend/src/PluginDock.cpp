@@ -16,6 +16,7 @@ PluginDock::PluginDock(QWidget *parent)
 	  m_sourcesListWidget(new QListWidget(this)),
 	  m_toolbar(new QToolBar(this)) {
 
+	loadSourcesList();
 	m_addSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("plus.svg"), "AddSource", this,
 						 &PluginDock::onAddSourceClicked);
 	m_removeSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("trash.svg"), "RemoveSource", this,
@@ -64,7 +65,7 @@ PluginDock::PluginDock(QWidget *parent)
 	}
 
 	EventManager::get()->addFrontendEventListener(this);
-	m_sourceModificationSignalKey = obs_helpers::connectSourceEditSignals([this](calldata_t *cd) {
+	m_sourceModificationSignalKey = obs_helpers::connectSourceEditSignals([this](const calldata_t *cd) {
 		syncTrackedSourceNames(cd);
 		updateSourcesList();
 	});
@@ -116,19 +117,12 @@ void PluginDock::syncTrackedSourceNames(const calldata_t *cd) {
 	const char *prevName = calldata_string(cd, "prev_name");
 	const char *newName = calldata_string(cd, "new_name");
 	if (prevName && newName) {
-		const int i = m_sourcesList.indexOf(QString::fromUtf8(prevName));
+		const qsizetype i = m_sourcesList.indexOf(QString::fromUtf8(prevName));
 		if (i >= 0) {
 			m_sourcesList[i] = QString::fromUtf8(newName);
 		}
 		return;
 	}
-
-	const obs_source_t *source = static_cast<obs_source_t *>(calldata_ptr(cd, "source"));
-	if (!source || !obs_source_removed(source)) {
-		return;
-	}
-
-	m_sourcesList.removeOne(QString::fromUtf8(obs_source_get_name(source)));
 }
 
 void PluginDock::updateSourcesList() {
@@ -141,6 +135,54 @@ void PluginDock::updateSourcesList() {
 		obs_source_release(sourcePtr);
 		new QListWidgetItem(icon, source, m_sourcesListWidget);
 	}
+
+	saveSourcesList();
+}
+
+void PluginDock::saveSourcesList() {
+	obs_log(LOG_INFO, "Saving sources list");
+
+	obs_data_t *settings = PluginFrontend::get()->getSettingsObject();
+	obs_data_array_t *obsArray = obs_data_array_create();
+
+	for (const auto &source : m_sourcesList) {
+		obs_data_t *item = obs_data_create();
+		obs_data_set_string(item, "value", source.toUtf8().constData());
+		obs_data_array_push_back(obsArray, item);
+		obs_data_release(item);
+	}
+
+	obs_data_set_array(settings, "sources", obsArray);
+	obs_data_array_release(obsArray);
+
+	PluginFrontend::get()->saveSettingsObject();
+}
+
+void PluginDock::loadSourcesList() {
+	obs_log(LOG_INFO, "Loading sources list");
+	m_sourcesList.clear();
+
+	obs_data_t *settings = PluginFrontend::get()->getSettingsObject();
+	obs_data_array_t *obsArray = obs_data_get_array(settings, "sources");
+	if (!obsArray) {
+		return;
+	}
+
+	const size_t count = obs_data_array_count(obsArray);
+	m_sourcesList.resize(static_cast<qsizetype>(count));
+
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *item = obs_data_array_item(obsArray, i);
+		const char *str_val = obs_data_get_string(item, "value");
+		if (str_val) {
+			m_sourcesList[static_cast<qsizetype>(i)] = QString::fromUtf8(str_val);
+		}
+
+		obs_data_release(item);
+	}
+
+	obs_data_array_release(obsArray);
+	updateSourcesList();
 }
 
 void PluginDock::onSettingsClicked() {}

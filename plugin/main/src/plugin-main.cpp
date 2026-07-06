@@ -33,6 +33,7 @@ void on_frontend_event(const obs_frontend_event event, void *) {
 		if (!PluginFrontend::isRunning())
 			PluginFrontend::start();
 	} else if (event == OBS_FRONTEND_EVENT_EXIT) {
+		PluginFrontend::get()->saveSettingsObject();
 		PluginFrontend::stop();
 	}
 }

@@ -36,11 +36,16 @@ public:
 
 	void showSourceSelectorWindow() const;
 
+	obs_data_t *getSettingsObject();
+
+	void saveSettingsObject() const;
+
 	NO_DISCARD const QList<QString> &getAddedSources() const;
 
 private:
 	static PluginFrontend *s_instance;
 
 	PluginDock *m_pluginDock;
+	obs_data *m_settings{nullptr};
 	SourceSelectorWindow *m_sourceSelectorWindow;
 };

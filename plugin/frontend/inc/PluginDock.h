@@ -40,6 +40,9 @@ private:
 	void syncTrackedSourceNames(const calldata_t *cd);
 	void updateSourcesList();
 
+	void saveSourcesList();
+	void loadSourcesList();
+
 	QList<QString> m_sourcesList;
 	uint64_t m_sourceModificationSignalKey{0};
 	bool m_obsDockRegistered{false};
