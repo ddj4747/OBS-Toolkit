@@ -5,9 +5,31 @@
 #include <EventManager.h>
 #include <plugin-support.h>
 #include <QFrame>
+#include <QMainWindow>
+#include <util/config-file.h>
 
 namespace {
 const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
+
+void restoreSavedDockLayout() {
+	config_t *userConfig = obs_frontend_get_user_config();
+	if (!userConfig) {
+		return;
+	}
+
+	const char *dockStateStr = config_get_string(userConfig, "BasicWindow", "DockState");
+	if (!dockStateStr) {
+		return;
+	}
+
+	auto *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!mainWindow) {
+		return;
+	}
+
+	const QByteArray dockState = QByteArray::fromBase64(QByteArray(dockStateStr));
+	mainWindow->restoreState(dockState);
+}
 } // namespace
 
 PluginDock::PluginDock(QWidget *parent)
@@ -65,6 +87,8 @@ PluginDock::PluginDock(QWidget *parent)
 		obs_log(LOG_WARNING, "failed to register dock '%s'", PLUGIN_DOCK_ID.c_str());
 		return;
 	}
+
+	restoreSavedDockLayout();
 
 	connect(m_sourcesListWidget, &QListWidget::itemSelectionChanged, this,
 		&PluginDock::onSourcesListSelectionChanged);
