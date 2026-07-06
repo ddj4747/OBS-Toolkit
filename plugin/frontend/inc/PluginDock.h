@@ -26,6 +26,8 @@ public:
 
 	NO_DISCARD const QList<QString> &getSourcesList() const;
 
+	void detach();
+
 protected:
 	bool event(QEvent *event) override;
 
@@ -41,6 +43,7 @@ private:
 	QList<QString> m_sourcesList;
 	uint64_t m_sourceModificationSignalKey{0};
 	bool m_obsDockRegistered{false};
+	bool m_detached{false};
 
 	QVBoxLayout *m_layout;
 	QListWidget *m_sourcesListWidget;

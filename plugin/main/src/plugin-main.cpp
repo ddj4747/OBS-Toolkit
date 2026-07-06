@@ -29,13 +29,12 @@ OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
 namespace {
 void on_frontend_event(const obs_frontend_event event, void *) {
-	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING)
-		return;
-
-	if (PluginFrontend::isRunning())
-		return;
-
-	PluginFrontend::start();
+	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+		if (!PluginFrontend::isRunning())
+			PluginFrontend::start();
+	} else if (event == OBS_FRONTEND_EVENT_EXIT) {
+		PluginFrontend::stop();
+	}
 }
 } // namespace
 
@@ -48,6 +47,9 @@ bool obs_module_load(void) {
 void obs_module_unload(void) {
 	PluginFrontend::stop();
 	EventManager::destroy();
-	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
+
+	if (obs_frontend_get_main_window())
+		obs_frontend_remove_event_callback(on_frontend_event, nullptr);
+
 	obs_log(LOG_INFO, "plugin unloaded");
 }

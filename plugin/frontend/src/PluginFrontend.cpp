@@ -45,11 +45,11 @@ PluginFrontend::PluginFrontend(QMainWindow *window) {
 PluginFrontend::~PluginFrontend() {
 	if (m_sourceSelectorWindow) {
 		m_sourceSelectorWindow->hide();
-		delete m_sourceSelectorWindow;
+		m_sourceSelectorWindow->detach();
 		m_sourceSelectorWindow = nullptr;
 	}
 	if (m_pluginDock) {
-		delete m_pluginDock;
+		m_pluginDock->detach();
 		m_pluginDock = nullptr;
 	}
 }

@@ -25,6 +25,8 @@ public:
 
 	void refreshSourceList(const QList<QString> &excludedSources = QList<QString>());
 
+	void detach();
+
 protected:
 	bool event(QEvent *event) override;
 
@@ -40,6 +42,7 @@ private:
 	void processSourceCallback(const obs_source_t *source, const QList<QString> *excludedSources) const;
 
 	uint64_t m_sourceModificationSignalKey = 0;
+	bool m_detached{false};
 	QVBoxLayout *m_layout;
 	QHBoxLayout *m_buttonLayout;
 	QListWidget *m_listWidget;

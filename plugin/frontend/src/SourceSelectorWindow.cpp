@@ -33,13 +33,16 @@ SourceSelectorWindow::SourceSelectorWindow(QWidget *parent)
 }
 
 SourceSelectorWindow::~SourceSelectorWindow() {
-	EventManager::get()->removeFrontendEventListener(this);
+	detach();
+}
 
-	if (isHidden()) {
+void SourceSelectorWindow::detach() {
+	if (m_detached)
 		return;
-	}
-
+	m_detached = true;
 	obs_helpers::disconnectSourceEditSignals(m_sourceModificationSignalKey);
+	m_sourceModificationSignalKey = 0;
+	EventManager::get()->removeFrontendEventListener(this);
 }
 
 void SourceSelectorWindow::refreshSourceList(const QList<QString> &excludedSources) {

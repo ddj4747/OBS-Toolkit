@@ -71,11 +71,16 @@ PluginDock::PluginDock(QWidget *parent)
 }
 
 PluginDock::~PluginDock() {
+	detach();
+}
+
+void PluginDock::detach() {
+	if (m_detached)
+		return;
+	m_detached = true;
 	obs_helpers::disconnectSourceEditSignals(m_sourceModificationSignalKey);
+	m_sourceModificationSignalKey = 0;
 	EventManager::get()->removeFrontendEventListener(this);
-	if (m_obsDockRegistered) {
-		obs_frontend_remove_dock(PLUGIN_DOCK_ID.c_str());
-	}
 }
 
 const QList<QString> &PluginDock::getSourcesList() const {
