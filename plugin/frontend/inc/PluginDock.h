@@ -35,10 +35,12 @@ private slots:
 	void onSettingsClicked();
 	static void onAddSourceClicked();
 	void onRemoveSourceClicked();
+	void onSourcesListSelectionChanged() const;
 
 private:
 	void syncTrackedSourceNames(const calldata_t *cd);
 	void updateSourcesList();
+	void updateAddSourceButtonState() const;
 
 	void saveSourcesList();
 	void loadSourcesList();

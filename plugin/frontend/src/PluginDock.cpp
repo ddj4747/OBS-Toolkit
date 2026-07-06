@@ -16,11 +16,12 @@ PluginDock::PluginDock(QWidget *parent)
 	  m_sourcesListWidget(new QListWidget(this)),
 	  m_toolbar(new QToolBar(this)) {
 
-	loadSourcesList();
 	m_addSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("plus.svg"), "AddSource", this,
 						 &PluginDock::onAddSourceClicked);
 	m_removeSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("trash.svg"), "RemoveSource", this,
 						    &PluginDock::onRemoveSourceClicked);
+
+	m_removeSourceAction->setEnabled(false);
 
 	m_toolbar->addSeparator();
 
@@ -63,6 +64,10 @@ PluginDock::PluginDock(QWidget *parent)
 		obs_log(LOG_WARNING, "failed to register dock '%s'", PLUGIN_DOCK_ID.c_str());
 		return;
 	}
+
+	connect(m_sourcesListWidget, &QListWidget::itemSelectionChanged, this,
+		&PluginDock::onSourcesListSelectionChanged);
+	loadSourcesList();
 
 	EventManager::get()->addFrontendEventListener(this);
 	m_sourceModificationSignalKey = obs_helpers::connectSourceEditSignals([this](const calldata_t *cd) {
@@ -137,6 +142,7 @@ void PluginDock::updateSourcesList() {
 	}
 
 	saveSourcesList();
+	updateAddSourceButtonState();
 }
 
 void PluginDock::saveSourcesList() {
@@ -185,6 +191,22 @@ void PluginDock::loadSourcesList() {
 	updateSourcesList();
 }
 
+void PluginDock::updateAddSourceButtonState() const {
+	const size_t dockSourcesCount = m_sourcesList.size();
+	size_t sourceCount = 0;
+
+	obs_enum_sources(
+		[](void *param, obs_source_t *) -> bool {
+			size_t *counter = static_cast<size_t *>(param);
+			(*counter)++;
+
+			return true;
+		},
+		&sourceCount);
+
+	m_addSourceAction->setEnabled(dockSourcesCount != sourceCount);
+}
+
 void PluginDock::onSettingsClicked() {}
 
 void PluginDock::onAddSourceClicked() {
@@ -209,4 +231,9 @@ void PluginDock::onRemoveSourceClicked() {
 	EventManager::get()->sendFrontendEvent(event);
 
 	updateSourcesList();
+}
+
+void PluginDock::onSourcesListSelectionChanged() const {
+	const QList<QListWidgetItem *> selected = m_sourcesListWidget->selectedItems();
+	m_removeSourceAction->setEnabled(!selected.empty());
 }
