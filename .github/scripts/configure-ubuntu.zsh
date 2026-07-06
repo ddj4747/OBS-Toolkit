@@ -20,7 +20,7 @@ cat > .env <<'EOF'
 DISABLE_DEBUG=true
 BUILD_TESTS=false
 QT_DIR=/usr
-SETUP_PORTABLE_OBS=false
+OBS_STUDIO_PATH=/
 EOF
 
 python3 configure.py

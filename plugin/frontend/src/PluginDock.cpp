@@ -16,9 +16,10 @@ PluginDock::PluginDock(QWidget *parent)
 	  m_sourcesListWidget(new QListWidget(this)),
 	  m_toolbar(new QToolBar(this)) {
 
-	m_addSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("plus.svg"), "AddSource", this,
+	m_addSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("plus.svg"), "Add New Sources", this,
 						 &PluginDock::onAddSourceClicked);
-	m_removeSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("trash.svg"), "RemoveSource", this,
+	m_removeSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("trash.svg"),
+						    "Remove Selected Sources", this,
 						    &PluginDock::onRemoveSourceClicked);
 
 	m_removeSourceAction->setEnabled(false);
@@ -126,7 +127,6 @@ void PluginDock::syncTrackedSourceNames(const calldata_t *cd) {
 		if (i >= 0) {
 			m_sourcesList[i] = QString::fromUtf8(newName);
 		}
-		return;
 	}
 }
 
