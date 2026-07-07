@@ -168,12 +168,20 @@ void PluginDock::syncTrackedSourceNames(const calldata_t *cd) {
 void PluginDock::updateSourcesList() {
 	m_sourcesListWidget->clear();
 
-	for (const auto &source : m_sourcesList) {
+	for (qsizetype i = 0; i < m_sourcesList.size(); i++) {
+		const QString &source = m_sourcesList.at(i);
 		obs_source_t *sourcePtr = obs_get_source_by_name(source.toUtf8());
+
+		if (!sourcePtr) {
+			m_sourcesList.removeAt(i);
+			i--;
+			continue;
+		}
+
 		const QIcon icon = obs_helpers::getIconFromSource(sourcePtr);
+		new QListWidgetItem(icon, source, m_sourcesListWidget);
 
 		obs_source_release(sourcePtr);
-		new QListWidgetItem(icon, source, m_sourcesListWidget);
 	}
 
 	saveSourcesList();
@@ -300,9 +308,9 @@ void PluginDock::onMoveDownSourceClicked() {
 	updateSourcesList();
 
 	for (const QString &name : selectedNames) {
-		const int index = m_sourcesList.indexOf(name);
+		const qsizetype index = m_sourcesList.indexOf(name);
 		if (index >= 0) {
-			m_sourcesListWidget->setCurrentRow(index, QItemSelectionModel::Select);
+			m_sourcesListWidget->setCurrentRow(static_cast<int>(index), QItemSelectionModel::Select);
 		}
 	}
 }
@@ -332,9 +340,9 @@ void PluginDock::onMoveUpSourceClicked() {
 	updateSourcesList();
 
 	for (const QString &name : selectedNames) {
-		const int index = m_sourcesList.indexOf(name);
+		const qsizetype index = m_sourcesList.indexOf(name);
 		if (index >= 0) {
-			m_sourcesListWidget->setCurrentRow(index, QItemSelectionModel::Select);
+			m_sourcesListWidget->setCurrentRow(static_cast<int>(index), QItemSelectionModel::Select);
 		}
 	}
 }

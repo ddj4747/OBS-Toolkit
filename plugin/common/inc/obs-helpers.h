@@ -2,7 +2,6 @@
 
 #include <QIcon>
 #include <callback/calldata.h>
-#include <callback/signal.h>
 #include <functional>
 
 struct obs_source;

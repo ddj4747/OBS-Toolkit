@@ -1,10 +1,8 @@
 #pragma once
 
-#include <QWidget>
 #include <QVBoxLayout>
 #include <QToolBar>
 #include <QAction>
-#include <QListWidget>
 #include <QListWidgetItem>
 #include <obs-frontend-api.h>
 
