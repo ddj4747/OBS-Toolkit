@@ -125,6 +125,11 @@ void PluginDock::detach() {
 	EventManager::get()->removeFrontendEventListener(this);
 }
 
+void PluginDock::prepareForShutdown() {
+	detach();
+	saveSourcesList();
+}
+
 const QList<QString> &PluginDock::getSourcesList() const {
 	return m_sourcesList;
 }
@@ -166,6 +171,10 @@ void PluginDock::syncTrackedSourceNames(const calldata_t *cd) {
 }
 
 void PluginDock::updateSourcesList() {
+	if (m_detached) {
+		return;
+	}
+
 	m_sourcesListWidget->clear();
 
 	for (qsizetype i = 0; i < m_sourcesList.size(); i++) {

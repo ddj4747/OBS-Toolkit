@@ -73,6 +73,21 @@ PluginFrontend::~PluginFrontend() {
 	}
 }
 
+void PluginFrontend::prepareForShutdown() {
+	if (m_shutdownPrepared) {
+		return;
+	}
+	m_shutdownPrepared = true;
+
+	if (m_sourceSelectorWindow) {
+		m_sourceSelectorWindow->hide();
+		m_sourceSelectorWindow->detach();
+	}
+	if (m_pluginDock) {
+		m_pluginDock->prepareForShutdown();
+	}
+}
+
 void PluginFrontend::hideSourceSelectorWindow() const {
 	if (!m_sourceSelectorWindow->isVisible()) {
 		return;

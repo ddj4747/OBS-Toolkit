@@ -26,6 +26,8 @@ public:
 
 	void detach();
 
+	void prepareForShutdown();
+
 protected:
 	bool event(QEvent *event) override;
 

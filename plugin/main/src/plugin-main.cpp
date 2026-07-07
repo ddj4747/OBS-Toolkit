@@ -28,12 +28,31 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 
 namespace {
+bool g_shutdownPrepared = false;
+
+void on_frontend_event(obs_frontend_event event, void *);
+
+void prepare_shutdown() {
+	if (g_shutdownPrepared) {
+		return;
+	}
+	g_shutdownPrepared = true;
+
+	if (PluginFrontend::isRunning()) {
+		PluginFrontend::get()->prepareForShutdown();
+	}
+}
+
 void on_frontend_event(const obs_frontend_event event, void *) {
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
-		if (!PluginFrontend::isRunning())
+		if (!PluginFrontend::isRunning()) {
 			PluginFrontend::start();
+		}
+	} else if (event == OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN) {
+		prepare_shutdown();
 	} else if (event == OBS_FRONTEND_EVENT_EXIT) {
-		PluginFrontend::get()->saveSettingsObject();
+		prepare_shutdown();
+		obs_frontend_remove_event_callback(on_frontend_event, nullptr);
 		PluginFrontend::stop();
 	}
 }
@@ -46,11 +65,12 @@ bool obs_module_load(void) {
 }
 
 void obs_module_unload(void) {
-	PluginFrontend::stop();
+	if (PluginFrontend::isRunning()) {
+		PluginFrontend::stop();
+	}
+
+	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
+
 	EventManager::destroy();
-
-	if (obs_frontend_get_main_window())
-		obs_frontend_remove_event_callback(on_frontend_event, nullptr);
-
 	obs_log(LOG_INFO, "plugin unloaded");
 }

@@ -32,6 +32,8 @@ public:
 
 	static bool isRunning();
 
+	void prepareForShutdown();
+
 	void hideSourceSelectorWindow() const;
 
 	void showSourceSelectorWindow() const;
@@ -48,4 +50,5 @@ private:
 	PluginDock *m_pluginDock;
 	obs_data *m_settings{nullptr};
 	SourceSelectorWindow *m_sourceSelectorWindow;
+	bool m_shutdownPrepared{false};
 };
