@@ -55,6 +55,7 @@ PluginFrontend::PluginFrontend(QMainWindow *window) {
 	s_instance = this;
 	m_pluginDock = new PluginDock(window);
 	m_sourceSelectorWindow = new SourceSelectorWindow(window);
+	m_pluginSettingsWindow = new PluginSettingsWindow(window);
 }
 
 PluginFrontend::~PluginFrontend() {
@@ -62,6 +63,10 @@ PluginFrontend::~PluginFrontend() {
 		m_sourceSelectorWindow->hide();
 		m_sourceSelectorWindow->detach();
 		m_sourceSelectorWindow = nullptr;
+	}
+	if (m_pluginSettingsWindow) {
+		m_pluginSettingsWindow->hide();
+		m_pluginSettingsWindow = nullptr;
 	}
 	if (m_pluginDock) {
 		m_pluginDock->detach();
@@ -83,6 +88,9 @@ void PluginFrontend::prepareForShutdown() {
 		m_sourceSelectorWindow->hide();
 		m_sourceSelectorWindow->detach();
 	}
+	if (m_pluginSettingsWindow) {
+		m_pluginSettingsWindow->hide();
+	}
 	if (m_pluginDock) {
 		m_pluginDock->prepareForShutdown();
 	}
@@ -94,6 +102,22 @@ void PluginFrontend::hideSourceSelectorWindow() const {
 	}
 
 	m_sourceSelectorWindow->hide();
+}
+
+void PluginFrontend::hideSettingsWindow() const {
+	if (!m_pluginSettingsWindow->isVisible()) {
+		return;
+	}
+
+	m_pluginSettingsWindow->hide();
+}
+
+void PluginFrontend::showSettingsWindow() const {
+	if (m_pluginSettingsWindow->isVisible()) {
+		return;
+	}
+
+	m_pluginSettingsWindow->show();
 }
 
 void PluginFrontend::showSourceSelectorWindow() const {

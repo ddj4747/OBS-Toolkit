@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <PluginDock.h>
 #include <SourceSelectorWindow.h>
+#include <PluginSettingsWindow.h>
 
 #ifndef NO_DISCARD
 #define NO_DISCARD [[nodiscard]]
@@ -36,7 +37,11 @@ public:
 
 	void hideSourceSelectorWindow() const;
 
+	void hideSettingsWindow() const;
+
 	void showSourceSelectorWindow() const;
+
+	void showSettingsWindow() const;
 
 	obs_data_t *getSettingsObject();
 
@@ -50,5 +55,7 @@ private:
 	PluginDock *m_pluginDock;
 	obs_data *m_settings{nullptr};
 	SourceSelectorWindow *m_sourceSelectorWindow;
+	PluginSettingsWindow *m_pluginSettingsWindow;
+
 	bool m_shutdownPrepared{false};
 };

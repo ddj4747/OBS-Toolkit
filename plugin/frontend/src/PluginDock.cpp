@@ -259,7 +259,13 @@ void PluginDock::updateAddSourceButtonState() const {
 	m_addSourceAction->setEnabled(dockSourcesCount != sourceCount);
 }
 
-void PluginDock::onSettingsClicked() {}
+void PluginDock::onSettingsClicked() {
+	if (!PluginFrontend::isRunning()) {
+		return;
+	}
+
+	PluginFrontend::get()->showSettingsWindow();
+}
 
 void PluginDock::onAddSourceClicked() {
 	if (!PluginFrontend::isRunning()) {

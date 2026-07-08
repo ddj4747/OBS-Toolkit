@@ -32,7 +32,7 @@ protected:
 	bool event(QEvent *event) override;
 
 private slots:
-	void onSettingsClicked();
+	static void onSettingsClicked();
 	static void onAddSourceClicked();
 	void onRemoveSourceClicked();
 	void onSourcesListSelectionChanged() const;
