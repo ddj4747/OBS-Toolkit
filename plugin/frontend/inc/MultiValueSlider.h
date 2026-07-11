@@ -1,4 +1,6 @@
 #pragma once
+#include <QEnterEvent>
+#include <QEvent>
 #include <QWidget>
 #include <QStyleOptionSlider>
 
@@ -23,14 +25,23 @@ public:
 
 	NO_DISCARD QList<int> values() const;
 
+	NO_DISCARD int valueFromPixel(int pixelPos) const;
+	NO_DISCARD int pixelFromValue(int value) const;
+
+signals:
+	void valuesChanged();
+	void onHandlerPressed(int index);
+	void trackPressed(int value);
+	void onMouseEnter(QEnterEvent *event);
+	void onMouseLeave(QEvent *event);
+
 protected:
 	void paintEvent(QPaintEvent *event) override;
 	void mousePressEvent(QMouseEvent *event) override;
 	void mouseReleaseEvent(QMouseEvent *event) override;
 	void mouseMoveEvent(QMouseEvent *event) override;
-
-private:
-	NO_DISCARD int valueFromPixel(int pixelPos) const;
+	void enterEvent(QEnterEvent *event) override;
+	void leaveEvent(QEvent *event) override;
 
 	QStyleOptionSlider m_sliderDesign;
 	QList<int> m_values;

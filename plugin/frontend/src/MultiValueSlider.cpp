@@ -1,6 +1,7 @@
 #include <MultiValueSlider.h>
+
+#include <QMessageBox>
 #include <QStylePainter>
-#include <QToolTip>
 #include <qevent.h>
 
 MultiValueSlider::MultiValueSlider(QWidget *parent) : QSlider(Qt::Horizontal, parent) {
@@ -40,6 +41,11 @@ void MultiValueSlider::paintEvent(QPaintEvent *) {
 }
 
 void MultiValueSlider::mousePressEvent(QMouseEvent *event) {
+	if (event->button() != Qt::LeftButton) {
+		event->ignore();
+		return;
+	}
+
 	QStyleOptionSlider opt;
 	initStyleOption(&opt);
 	opt.subControls = QStyle::SC_SliderHandle;
@@ -60,10 +66,16 @@ void MultiValueSlider::mousePressEvent(QMouseEvent *event) {
 	}
 
 	if (m_activeValueIndex < 0) {
+		const int pixel = orientation() == Qt::Horizontal ? static_cast<int>(clickPos.x())
+								  : static_cast<int>(clickPos.y());
+		const int value = valueFromPixel(pixel);
+
+		emit trackPressed(value);
 		event->ignore();
 		return;
 	}
 
+	emit onHandlerPressed(m_activeValueIndex);
 	m_isMousePressed = true;
 	event->accept();
 }
@@ -101,7 +113,18 @@ void MultiValueSlider::mouseMoveEvent(QMouseEvent *event) {
 	m_values[m_activeValueIndex] = newValue;
 
 	update();
+	emit valuesChanged();
 	event->accept();
+}
+
+void MultiValueSlider::enterEvent(QEnterEvent *event) {
+	QSlider::enterEvent(event);
+	emit onMouseEnter(event);
+}
+
+void MultiValueSlider::leaveEvent(QEvent *event) {
+	QSlider::leaveEvent(event);
+	emit onMouseLeave(event);
 }
 
 int MultiValueSlider::valueFromPixel(const int pixelPos) const {
@@ -128,6 +151,26 @@ int MultiValueSlider::valueFromPixel(const int pixelPos) const {
 	}
 
 	return QStyle::sliderValueFromPosition(minimum(), maximum(), pos, span, opt.upsideDown);
+}
+
+int MultiValueSlider::pixelFromValue(const int value) const {
+	QStyleOptionSlider opt;
+	initStyleOption(&opt);
+
+	const QRect groove = style()->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderGroove, this);
+	const QRect handle = style()->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, this);
+
+	if (orientation() == Qt::Horizontal) {
+		const int handleLength = handle.width();
+		const int span = groove.width() - handleLength;
+		const int pos = QStyle::sliderPositionFromValue(minimum(), maximum(), value, span, opt.upsideDown);
+		return groove.x() + handleLength / 2 + pos;
+	}
+
+	const int handleLength = handle.height();
+	const int span = groove.height() - handleLength;
+	const int pos = QStyle::sliderPositionFromValue(minimum(), maximum(), value, span, opt.upsideDown);
+	return groove.y() + handleLength / 2 + pos;
 }
 
 void MultiValueSlider::removeValue(const int index) {
