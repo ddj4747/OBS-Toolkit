@@ -57,7 +57,9 @@ void SourcePartitionSelector::paintEvent(QPaintEvent *) {
 	QPen pen;
 	pen.setWidth(2);
 	pen.setStyle(Qt::SolidLine);
+
 	QBrush brush;
+	brush.setStyle(Qt::FDiagPattern);
 
 	int prevX = 0;
 	const int partitionHeight = m_slider->geometry().center().y();
@@ -67,11 +69,9 @@ void SourcePartitionSelector::paintEvent(QPaintEvent *) {
 		if (i % 2 == 0) {
 			pen.setColor(penColor1);
 			brush.setColor(brushColor1);
-			brush.setStyle(Qt::FDiagPattern);
 		} else {
 			pen.setColor(penColor2);
 			brush.setColor(brushColor2);
-			brush.setStyle(Qt::BDiagPattern);
 		}
 
 		painter.setPen(pen);
@@ -85,11 +85,9 @@ void SourcePartitionSelector::paintEvent(QPaintEvent *) {
 	if (values.count() % 2 == 0) {
 		pen.setColor(penColor1);
 		brush.setColor(brushColor1);
-		brush.setStyle(Qt::FDiagPattern);
 	} else {
 		pen.setColor(penColor2);
 		brush.setColor(brushColor2);
-		brush.setStyle(Qt::BDiagPattern);
 	}
 
 	painter.setPen(pen);
@@ -104,7 +102,22 @@ void SourcePartitionSelector::mousePressEvent(QMouseEvent *event) {
 		return;
 	}
 
-	QMessageBox::warning(this, "Warning", "Click me", QMessageBox::Ok);
+	const int value = m_slider->valueFromPixel(static_cast<int>(clickPosition.x()));
+	const auto &values = m_slider->values();
+	int index = 0;
+
+	if (values.count() > 0 && value >= values[0]) {
+		index++;
+		for (int i = 0; i < values.count() - 1; i++) {
+			if (values[i] < value && values[i + 1] >= value) {
+				break;
+			}
+
+			index++;
+		}
+	}
+
+	QMessageBox::warning(m_slider, "Clicked partition", QString("%1 %2").arg(index).arg(value));
 
 	event->accept();
 }

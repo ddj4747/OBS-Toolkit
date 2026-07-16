@@ -40,8 +40,11 @@ private slots:
 	void onMoveDownSourceClicked();
 
 private:
+	static void onFrontendEvent(obs_frontend_event event, void *data);
+
 	void syncTrackedSourceNames(const calldata_t *cd);
 	void updateSourcesList();
+	void updateActionIcons() const;
 	void updateAddSourceButtonState() const;
 
 	void saveSourcesList();

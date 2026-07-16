@@ -11,6 +11,11 @@
 
 namespace {
 const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
+const QString PLUS_ICON_PATH = QStringLiteral("plus.svg");
+const QString REMOVE_ICON_PATH = QStringLiteral("trash.svg");
+const QString SETTINGS_ICON_PATH = QStringLiteral("settings/general.svg");
+const QString ARROW_UP_ICON_PATH = QStringLiteral("up.svg");
+const QString ARROW_DOWN_ICON_PATH = QStringLiteral("down.svg");
 
 void restoreSavedDockLayout() {
 	config_t *userConfig = obs_frontend_get_user_config();
@@ -39,24 +44,25 @@ PluginDock::PluginDock(QWidget *parent)
 	  m_sourcesListWidget(new QListWidget(this)),
 	  m_toolbar(new QToolBar(this)) {
 
-	m_addSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("plus.svg"), "Add New Sources", this,
+	m_addSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath(PLUS_ICON_PATH), "Add New Sources", this,
 						 &PluginDock::onAddSourceClicked);
-	m_removeSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("trash.svg"),
+	m_removeSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath(REMOVE_ICON_PATH),
 						    "Remove Selected Sources", this,
 						    &PluginDock::onRemoveSourceClicked);
 
 	m_toolbar->addSeparator();
 
-	m_settingsAction = m_toolbar->addAction(obs_helpers::getIconFromPath("settings/general.svg"), "Settings", this,
+	m_settingsAction = m_toolbar->addAction(obs_helpers::getIconFromPath(SETTINGS_ICON_PATH), "Settings", this,
 						&PluginDock::onSettingsClicked);
 
 	m_toolbar->addSeparator();
 
-	m_moveUpSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("up.svg"), "Move Source Upward", this,
-						    &PluginDock::onMoveUpSourceClicked);
+	m_moveUpSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath(ARROW_UP_ICON_PATH),
+						    "Move Source Upward", this, &PluginDock::onMoveUpSourceClicked);
 
-	m_moveDownSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath("down.svg"), "Move Source Downward",
-						      this, &PluginDock::onMoveDownSourceClicked);
+	m_moveDownSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath(ARROW_DOWN_ICON_PATH),
+						      "Move Source Downward", this,
+						      &PluginDock::onMoveDownSourceClicked);
 
 	m_removeSourceAction->setEnabled(false);
 	m_moveDownSourceAction->setEnabled(false);
@@ -106,6 +112,9 @@ PluginDock::PluginDock(QWidget *parent)
 	loadSourcesList();
 
 	EventManager::get()->addFrontendEventListener(this);
+
+	obs_frontend_add_event_callback(onFrontendEvent, static_cast<void *>(this));
+
 	m_sourceModificationSignalKey = obs_helpers::connectSourceEditSignals([this](const calldata_t *cd) {
 		syncTrackedSourceNames(cd);
 		updateSourcesList();
@@ -123,6 +132,7 @@ void PluginDock::detach() {
 	obs_helpers::disconnectSourceEditSignals(m_sourceModificationSignalKey);
 	m_sourceModificationSignalKey = 0;
 	EventManager::get()->removeFrontendEventListener(this);
+	obs_frontend_remove_event_callback(onFrontendEvent, static_cast<void *>(this));
 }
 
 void PluginDock::prepareForShutdown() {
@@ -195,6 +205,14 @@ void PluginDock::updateSourcesList() {
 
 	saveSourcesList();
 	updateAddSourceButtonState();
+}
+
+void PluginDock::updateActionIcons() const {
+	m_addSourceAction->setIcon(obs_helpers::getIconFromPath(PLUS_ICON_PATH));
+	m_removeSourceAction->setIcon(obs_helpers::getIconFromPath(REMOVE_ICON_PATH));
+	m_settingsAction->setIcon(obs_helpers::getIconFromPath(SETTINGS_ICON_PATH));
+	m_moveUpSourceAction->setIcon(obs_helpers::getIconFromPath(ARROW_UP_ICON_PATH));
+	m_moveDownSourceAction->setIcon(obs_helpers::getIconFromPath(ARROW_DOWN_ICON_PATH));
 }
 
 void PluginDock::saveSourcesList() {
@@ -327,6 +345,15 @@ void PluginDock::onMoveDownSourceClicked() {
 		if (index >= 0) {
 			m_sourcesListWidget->setCurrentRow(static_cast<int>(index), QItemSelectionModel::Select);
 		}
+	}
+}
+
+void PluginDock::onFrontendEvent(const obs_frontend_event event, void *data) {
+	if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
+		PluginDock *dock = static_cast<PluginDock *>(data);
+
+		dock->updateSourcesList();
+		dock->updateActionIcons();
 	}
 }
 
