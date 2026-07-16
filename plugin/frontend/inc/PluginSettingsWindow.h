@@ -1,11 +1,10 @@
 #pragma once
 
 #include <QVBoxLayout>
-#include <QPushButton>
-#include <QListWidgetItem>
+#include <QScrollArea>
 #include <obs-frontend-api.h>
-#include <QCloseEvent>
 #include <SourcePartitionSelector.h>
+#include <PartitionSettingsWidget.h>
 
 class PluginSettingsWindow : public QWidget {
 	Q_OBJECT
@@ -24,6 +23,14 @@ public:
 
 	PluginSettingsWindow &operator=(const PluginSettingsWindow &&) = delete;
 
+private slots:
+	void onPartitionSelectorValueChanged();
+
 private:
 	SourcePartitionSelector *m_sourcePartitionSelector;
+	QScrollArea *m_partitionScrollArea;
+	QWidget *m_partitionScrollContent;
+	QVBoxLayout *m_partitionSettingsLayout;
+	QList<PartitionSettingsWidget *> m_partitionSettings;
+	QVBoxLayout *m_mainLayout;
 };

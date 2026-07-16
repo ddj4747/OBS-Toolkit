@@ -4,9 +4,10 @@
 #include <QColor>
 #include <SourcePartitionSelector.h>
 #include <QPainter>
-#include <QMessageBox>
 #include <QApplication>
 #include <qevent.h>
+#include <EventManager.h>
+#include <FrontendEvents.h>
 
 SourcePartitionSelector::SourcePartitionSelector(QWidget *parent, const int minValue, const int maxValue)
 	: QWidget(parent),
@@ -32,6 +33,14 @@ SourcePartitionSelector::SourcePartitionSelector(QWidget *parent, const int minV
 		&SourcePartitionSelector::onHandleRightClicked);
 	connect(m_slider, &MultiValueSlider::onMouseLeave, this,
 		&SourcePartitionSelector::onSliderMouseLeave); // Ignore this clangd error, its bullshit
+}
+
+void SourcePartitionSelector::setHandleValue(const int index, const int value) const {
+	m_slider->setValue(index, value);
+}
+
+QList<int> SourcePartitionSelector::getHandleValues() const {
+	return m_slider->values();
 }
 
 void SourcePartitionSelector::paintEvent(QPaintEvent *) {
@@ -117,17 +126,18 @@ void SourcePartitionSelector::mousePressEvent(QMouseEvent *event) {
 		}
 	}
 
-	QMessageBox::warning(m_slider, "Clicked partition", QString("%1 %2").arg(index).arg(value));
-
+	emit onValuesChanged();
 	event->accept();
 }
 
 void SourcePartitionSelector::onSliderTrackPressed(const int value) {
 	m_slider->addValue(value);
+	emit onValuesChanged();
 	updatePartitions();
 }
 
 void SourcePartitionSelector::updatePartitions() {
+	emit onValuesChanged();
 	update();
 }
 
@@ -154,4 +164,5 @@ void SourcePartitionSelector::onHandleRightClicked(const QMouseEvent *event, con
 
 void SourcePartitionSelector::removeSelectedHandle() const {
 	m_slider->removeValue(m_handleIndex);
+	emit onValuesChanged();
 }

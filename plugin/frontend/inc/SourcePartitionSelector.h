@@ -6,14 +6,24 @@
 #include <QMenu>
 #include <qboxlayout.h>
 
+#ifndef NO_DISCARD
+#define NO_DISCARD [[nodiscard]]
+#endif
+
 class SourcePartitionSelector : public QWidget {
 	Q_OBJECT
 public:
 	explicit SourcePartitionSelector(QWidget *parent = nullptr, int minValue = 0, int maxValue = 10000);
 
+	void setHandleValue(int index, int value) const;
+	NO_DISCARD QList<int> getHandleValues() const;
+
 protected:
 	void paintEvent(QPaintEvent *event) override;
 	void mousePressEvent(QMouseEvent *event) override;
+
+signals:
+	void onValuesChanged() const;
 
 private slots:
 	void updatePartitions();

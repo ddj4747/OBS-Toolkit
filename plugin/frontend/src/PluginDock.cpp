@@ -7,7 +7,10 @@
 #include <QFrame>
 #include <QMainWindow>
 #include <QItemSelectionModel>
+#include <QStyle>
 #include <util/config-file.h>
+
+#include <algorithm>
 
 namespace {
 const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
@@ -203,8 +206,23 @@ void PluginDock::updateSourcesList() {
 		obs_source_release(sourcePtr);
 	}
 
+	updateMinimumDockWidth();
+
 	saveSourcesList();
 	updateAddSourceButtonState();
+}
+
+void PluginDock::updateMinimumDockWidth() {
+	int contentWidth = m_toolbar->sizeHint().width();
+
+	if (m_sourcesListWidget->count() > 0) {
+		contentWidth = std::max(contentWidth, m_sourcesListWidget->sizeHintForColumn(0));
+	}
+
+	const QMargins margins = m_layout->contentsMargins();
+	contentWidth += margins.left() + margins.right() + 2;
+
+	setMinimumWidth(contentWidth);
 }
 
 void PluginDock::updateActionIcons() const {

@@ -28,6 +28,28 @@ void MultiValueSlider::addValue(const int value) {
 	m_values.append(value);
 }
 
+void MultiValueSlider::setValue(const int index, int value) {
+	if (index < 0 || index >= m_values.count()) {
+		return;
+	}
+
+	if (index > 0 && m_values.at(index - 1) > value) {
+		value = m_values.at(index - 1);
+	}
+
+	if (index < m_values.count() - 1 && m_values.at(index + 1) < value) {
+		value = m_values.at(index + 1);
+	}
+
+	if (m_values.at(index) == value) {
+		return;
+	}
+
+	m_values[index] = value;
+	update();
+	emit valuesChanged();
+}
+
 void MultiValueSlider::paintEvent(QPaintEvent *) {
 	QStylePainter painter(this);
 

@@ -44,6 +44,7 @@ private:
 
 	void syncTrackedSourceNames(const calldata_t *cd);
 	void updateSourcesList();
+	void updateMinimumDockWidth();
 	void updateActionIcons() const;
 	void updateAddSourceButtonState() const;
 

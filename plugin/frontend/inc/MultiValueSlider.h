@@ -15,6 +15,8 @@ public:
 	explicit MultiValueSlider(QWidget *parent, Qt::Orientation orientation, int minValue, int maxValue);
 
 	void addValue(int value);
+	void setValue(int index, int value);
+
 	void removeValue(int index);
 
 	void setMaxValue(int maxValue);
