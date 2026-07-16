@@ -34,6 +34,8 @@ signals:
 	void trackPressed(int value);
 	void onMouseEnter(QEnterEvent *event);
 	void onMouseLeave(QEvent *event);
+	void onHoveredValueChanged(int value);
+	void onHandleRightClicked(QMouseEvent *event, int index);
 
 protected:
 	void paintEvent(QPaintEvent *event) override;
@@ -43,8 +45,12 @@ protected:
 	void enterEvent(QEnterEvent *event) override;
 	void leaveEvent(QEvent *event) override;
 
+	NO_DISCARD int handleAt(const QPointF &pos) const;
+	void updateHoveredHandle(const QPointF &pos);
+
 	QStyleOptionSlider m_sliderDesign;
 	QList<int> m_values;
 	int m_activeValueIndex = -1;
+	int m_hoveredValueIndex = -1;
 	bool m_isMousePressed{false};
 };
