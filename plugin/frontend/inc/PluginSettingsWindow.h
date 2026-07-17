@@ -25,12 +25,18 @@ public:
 
 private slots:
 	void onPartitionSelectorValueChanged();
+	void onPartitionClicked(int partition);
+	void onPartitionFocused(int partition);
 
 private:
+	void setFocusedPartition(int partition);
+
 	SourcePartitionSelector *m_sourcePartitionSelector;
 	QScrollArea *m_partitionScrollArea;
 	QWidget *m_partitionScrollContent;
 	QVBoxLayout *m_partitionSettingsLayout;
 	QList<PartitionSettingsWidget *> m_partitionSettings;
 	QVBoxLayout *m_mainLayout;
+	int m_focusedPartitionSettings = -1;
+	bool m_ignoreHoverFocus = false;
 };

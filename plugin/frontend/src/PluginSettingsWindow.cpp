@@ -1,6 +1,7 @@
 #include <PluginSettingsWindow.h>
 #include <plugin-support.h>
 #include <QFrame>
+#include <QTimer>
 
 PluginSettingsWindow::PluginSettingsWindow(QWidget *parent)
 	: QWidget(parent, Qt::Window),
@@ -33,8 +34,11 @@ PluginSettingsWindow::PluginSettingsWindow(QWidget *parent)
 
 	connect(m_sourcePartitionSelector, &SourcePartitionSelector::onValuesChanged, this,
 		&PluginSettingsWindow::onPartitionSelectorValueChanged);
+	connect(m_sourcePartitionSelector, &SourcePartitionSelector::onPartitionClicked, this,
+		&PluginSettingsWindow::onPartitionClicked);
 
 	onPartitionSelectorValueChanged();
+	onPartitionClicked(0);
 
 	m_sourcePartitionSelector->setMinimumWidth(500);
 	setLayout(m_mainLayout);
@@ -49,6 +53,10 @@ void PluginSettingsWindow::onPartitionSelectorValueChanged() {
 	while (m_partitionSettings.count() > targetCount) {
 		PartitionSettingsWidget *widget = m_partitionSettings.back();
 		m_partitionSettingsLayout->removeWidget(widget);
+
+		disconnect(m_partitionSettings.back(), &PartitionSettingsWidget::onPartitionFocused, this,
+			   &PluginSettingsWindow::onPartitionFocused);
+
 		m_partitionSettings.pop_back();
 		widget->deleteLater();
 	}
@@ -60,10 +68,52 @@ void PluginSettingsWindow::onPartitionSelectorValueChanged() {
 
 		m_partitionSettings.append(new PartitionSettingsWidget(m_partitionScrollContent,
 								       m_sourcePartitionSelector, index, min, max));
+		connect(m_partitionSettings.back(), &PartitionSettingsWidget::onPartitionFocused, this,
+			&PluginSettingsWindow::onPartitionFocused);
+
 		m_partitionSettingsLayout->addWidget(m_partitionSettings.back());
 	}
 
 	for (const auto &partition : m_partitionSettings) {
 		partition->updateValue(10000);
 	}
+}
+
+void PluginSettingsWindow::setFocusedPartition(const int partition) {
+	if (partition < 0 || partition >= m_partitionSettings.count()) {
+		return;
+	}
+
+	if (partition == m_focusedPartitionSettings) {
+		m_partitionSettings.at(partition)->setHighlighted(true);
+		m_sourcePartitionSelector->highlightPartition(partition);
+		return;
+	}
+
+	if (m_focusedPartitionSettings >= 0 && m_focusedPartitionSettings < m_partitionSettings.count()) {
+		m_partitionSettings.at(m_focusedPartitionSettings)->setHighlighted(false);
+	}
+
+	m_focusedPartitionSettings = partition;
+	m_partitionSettings.at(partition)->setHighlighted(true);
+	m_sourcePartitionSelector->highlightPartition(partition);
+}
+
+void PluginSettingsWindow::onPartitionClicked(const int partition) {
+	if (partition < 0 || partition >= m_partitionSettings.count()) {
+		return;
+	}
+
+	m_ignoreHoverFocus = true;
+	setFocusedPartition(partition);
+	m_partitionScrollArea->ensureWidgetVisible(m_partitionSettings.at(partition));
+	QTimer::singleShot(0, this, [this]() { m_ignoreHoverFocus = false; });
+}
+
+void PluginSettingsWindow::onPartitionFocused(const int partition) {
+	if (m_ignoreHoverFocus) {
+		return;
+	}
+
+	setFocusedPartition(partition);
 }

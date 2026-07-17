@@ -4,10 +4,30 @@
 #include <QColor>
 #include <SourcePartitionSelector.h>
 #include <QPainter>
+#include <QPixmap>
 #include <QApplication>
 #include <qevent.h>
 #include <EventManager.h>
 #include <FrontendEvents.h>
+
+namespace {
+QBrush makeDiagHatchBrush(const QColor &color, const int lineWidth = 2, const int spacing = 8) {
+	const int size = spacing;
+	QPixmap pixmap(size, size);
+	pixmap.fill(Qt::transparent);
+
+	QPainter p(&pixmap);
+	p.setRenderHint(QPainter::Antialiasing, true);
+	p.setPen(QPen(color, lineWidth, Qt::SolidLine, Qt::FlatCap));
+
+	p.drawLine(0, size, size, 0);
+	p.drawLine(-size, size, size, -size);
+	p.drawLine(0, size * 2, size * 2, 0);
+	p.end();
+
+	return QBrush(pixmap);
+}
+} // namespace
 
 SourcePartitionSelector::SourcePartitionSelector(QWidget *parent, const int minValue, const int maxValue)
 	: QWidget(parent),
@@ -35,6 +55,15 @@ SourcePartitionSelector::SourcePartitionSelector(QWidget *parent, const int minV
 		&SourcePartitionSelector::onSliderMouseLeave); // Ignore this clangd error, its bullshit
 }
 
+void SourcePartitionSelector::highlightPartition(const int partition) {
+	if (m_highlightedPartition == partition) {
+		return;
+	}
+
+	m_highlightedPartition = partition;
+	update();
+}
+
 void SourcePartitionSelector::setHandleValue(const int index, const int value) const {
 	m_slider->setValue(index, value);
 }
@@ -55,53 +84,85 @@ void SourcePartitionSelector::paintEvent(QPaintEvent *) {
 	const QMainWindow *mainWindow = static_cast<QMainWindow *>(main_window_void);
 	const QPalette palette = mainWindow->palette();
 
-	QColor penColor1 = palette.color(QPalette::Highlight);
-	QColor brushColor1 = palette.color(QPalette::Highlight);
-	brushColor1.setAlpha(80);
+	const QColor highlight = palette.color(QPalette::Highlight);
+	const QColor muted = palette.color(QPalette::WindowText);
 
-	QColor penColor2 = palette.color(QPalette::WindowText);
-	QColor brushColor2 = palette.color(QPalette::ButtonText);
-	brushColor2.setAlpha(80);
+	QColor hatchEven = highlight;
+	hatchEven.setAlpha(90);
+	QColor hatchOdd = muted;
+	hatchOdd.setAlpha(70);
+
+	QColor hatchSelected = highlight;
+	hatchSelected.setAlpha(160);
+
+	QColor washSelected = highlight;
+	washSelected.setAlpha(45);
+
+	QColor dimOverlay = palette.color(QPalette::Window);
+	dimOverlay.setAlpha(110);
 
 	QPen pen;
-	pen.setWidth(2);
+	pen.setWidth(3);
 	pen.setStyle(Qt::SolidLine);
 
-	QBrush brush;
-	brush.setStyle(Qt::FDiagPattern);
+	constexpr int kHatchLineWidth = 2;
+	constexpr int kHatchSpacing = 8;
+	const QBrush hatchBrushEven = makeDiagHatchBrush(hatchEven, kHatchLineWidth, kHatchSpacing);
+	const QBrush hatchBrushOdd = makeDiagHatchBrush(hatchOdd, kHatchLineWidth, kHatchSpacing);
+	const QBrush hatchBrushSelected = makeDiagHatchBrush(hatchSelected, kHatchLineWidth, kHatchSpacing);
 
-	int prevX = 0;
 	const int partitionHeight = m_slider->geometry().center().y();
-
 	const auto values = m_slider->values();
-	for (int i = 0; i < values.count(); i++) {
-		if (i % 2 == 0) {
-			pen.setColor(penColor1);
-			brush.setColor(brushColor1);
+	const int partitionCount = static_cast<int>(values.count()) + 1;
+	const bool hasSelection = m_highlightedPartition >= 0 && m_highlightedPartition < partitionCount;
+
+	int selectedX = 0;
+	int selectedW = 0;
+	int prevX = 0;
+
+	for (int i = 0; i < partitionCount; ++i) {
+		const int x = (i < values.count())
+				      ? m_slider->mapTo(this, QPoint(m_slider->pixelFromValue(values.at(i)), 0)).x()
+				      : width();
+		const int w = x - prevX;
+		const bool selected = i == m_highlightedPartition;
+
+		if (selected) {
+			pen.setColor(highlight);
+			painter.setBrush(hatchBrushSelected);
+			selectedX = prevX;
+			selectedW = w;
+		} else if (i % 2 == 0) {
+			pen.setColor(highlight);
+			painter.setBrush(hatchBrushEven);
 		} else {
-			pen.setColor(penColor2);
-			brush.setColor(brushColor2);
+			pen.setColor(muted);
+			painter.setBrush(hatchBrushOdd);
 		}
 
 		painter.setPen(pen);
-		painter.setBrush(brush);
+		painter.drawRect(prevX, 0, w, partitionHeight);
 
-		const int x = m_slider->mapTo(this, QPoint(m_slider->pixelFromValue(values.at(i)), 0)).x();
-		painter.drawRect(prevX, 0, x - prevX, partitionHeight);
+		if (hasSelection && !selected) {
+			painter.fillRect(prevX, 0, w, partitionHeight, dimOverlay);
+		}
+
 		prevX = x;
 	}
 
-	if (values.count() % 2 == 0) {
-		pen.setColor(penColor1);
-		brush.setColor(brushColor1);
-	} else {
-		pen.setColor(penColor2);
-		brush.setColor(brushColor2);
+	if (!hasSelection) {
+		return;
 	}
 
+	painter.fillRect(selectedX, 0, selectedW, partitionHeight, washSelected);
+
+	pen.setColor(highlight);
+	pen.setWidth(2);
 	painter.setPen(pen);
-	painter.setBrush(brush);
-	painter.drawRect(prevX, 0, width() - prevX, partitionHeight);
+	painter.setBrush(Qt::NoBrush);
+	painter.drawRect(QRect(selectedX, 0, selectedW, partitionHeight).adjusted(1, 1, -1, -1));
+
+	painter.fillRect(selectedX, partitionHeight - 3, selectedW, 3, highlight);
 }
 
 void SourcePartitionSelector::mousePressEvent(QMouseEvent *event) {
@@ -113,20 +174,13 @@ void SourcePartitionSelector::mousePressEvent(QMouseEvent *event) {
 
 	const int value = m_slider->valueFromPixel(static_cast<int>(clickPosition.x()));
 	const auto &values = m_slider->values();
+
 	int index = 0;
-
-	if (values.count() > 0 && value >= values[0]) {
-		index++;
-		for (int i = 0; i < values.count() - 1; i++) {
-			if (values[i] < value && values[i + 1] >= value) {
-				break;
-			}
-
-			index++;
-		}
+	while (index < values.count() && value >= values.at(index)) {
+		++index;
 	}
 
-	emit onValuesChanged();
+	emit onPartitionClicked(index);
 	event->accept();
 }
 

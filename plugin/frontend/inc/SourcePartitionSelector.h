@@ -15,6 +15,7 @@ class SourcePartitionSelector : public QWidget {
 public:
 	explicit SourcePartitionSelector(QWidget *parent = nullptr, int minValue = 0, int maxValue = 10000);
 
+	void highlightPartition(int partition);
 	void setHandleValue(int index, int value) const;
 	NO_DISCARD QList<int> getHandleValues() const;
 
@@ -24,6 +25,7 @@ protected:
 
 signals:
 	void onValuesChanged() const;
+	void onPartitionClicked(int partition) const;
 
 private slots:
 	void updatePartitions();
@@ -40,4 +42,5 @@ private:
 	QAction *m_removeValueAction{nullptr};
 	MultiValueSlider *m_slider;
 	int m_handleIndex = -1;
+	int m_highlightedPartition = -1;
 };

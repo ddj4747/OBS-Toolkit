@@ -1,6 +1,7 @@
 #include <PartitionSettingsWidget.h>
 #include <SourcePartitionSelector.h>
 
+#include <QPainter>
 #include <QSignalBlocker>
 
 PartitionSettingsWidget::PartitionSettingsWidget(QWidget *parent, SourcePartitionSelector *selector, const int index,
@@ -63,11 +64,9 @@ void PartitionSettingsWidget::updateValue(const int max) const {
 	const int from = (m_index == 0) ? 0 : values.at(m_index - 1);
 	const int to = (m_index == count) ? max : values.at(m_index);
 
-	// "From" drives handle (m_index - 1): bounded by the handle before it and this partition's "To".
 	const int fromLower = (m_index >= 2) ? values.at(m_index - 2) : 0;
 	const int fromUpper = to;
 
-	// "To" drives handle (m_index): bounded by this partition's "From" and the handle after it.
 	const int toLower = from;
 	const int toUpper = (m_index + 1 < count) ? values.at(m_index + 1) : max;
 
@@ -82,6 +81,34 @@ void PartitionSettingsWidget::updateValue(const int max) const {
 
 	m_minValue->setDisabled(m_index == 0);
 	m_maxValue->setDisabled(m_index == count);
+}
+
+void PartitionSettingsWidget::setHighlighted(const bool highlighted) {
+	if (m_highlighted == highlighted) {
+		return;
+	}
+
+	m_highlighted = highlighted;
+	update();
+}
+
+void PartitionSettingsWidget::enterEvent(QEnterEvent *event) {
+	QGroupBox::enterEvent(event);
+	emit onPartitionFocused(m_index);
+}
+
+void PartitionSettingsWidget::paintEvent(QPaintEvent *event) {
+	QGroupBox::paintEvent(event);
+
+	if (!m_highlighted) {
+		return;
+	}
+
+	QPainter painter(this);
+	painter.setRenderHint(QPainter::Antialiasing, true);
+	painter.setPen(QPen(palette().color(QPalette::Highlight), 2));
+	painter.setBrush(Qt::NoBrush);
+	painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 4, 4);
 }
 
 void PartitionSettingsWidget::onValueChanged() const {
