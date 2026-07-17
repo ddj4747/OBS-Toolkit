@@ -17,12 +17,12 @@ QBrush makeDiagHatchBrush(const QColor &color, const int lineWidth = 2, const in
 	pixmap.fill(Qt::transparent);
 
 	QPainter p(&pixmap);
-	p.setRenderHint(QPainter::Antialiasing, true);
+	p.setRenderHint(QPainter::Antialiasing, false);
 	p.setPen(QPen(color, lineWidth, Qt::SolidLine, Qt::FlatCap));
 
-	p.drawLine(0, size, size, 0);
-	p.drawLine(-size, size, size, -size);
-	p.drawLine(0, size * 2, size * 2, 0);
+	p.drawLine(0, 0, size, size);
+	p.drawLine(-size, 0, size, size * 2);
+	p.drawLine(0, -size, size * 2, size);
 	p.end();
 
 	return QBrush(pixmap);
