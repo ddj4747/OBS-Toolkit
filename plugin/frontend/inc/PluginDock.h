@@ -33,8 +33,6 @@ protected:
 
 private slots:
 	static void onSettingsClicked();
-	static void onAddSourceClicked();
-	void onRemoveSourceClicked();
 	void onSourcesListSelectionChanged() const;
 	void onMoveUpSourceClicked();
 	void onMoveDownSourceClicked();
@@ -46,8 +44,6 @@ private:
 	void updateSourcesList();
 	void updateMinimumDockWidth();
 	void updateActionIcons() const;
-	void updateAddSourceButtonState() const;
-
 	void saveSourcesList();
 	void loadSourcesList();
 
@@ -61,8 +57,7 @@ private:
 	QToolBar *m_toolbar;
 
 	QAction *m_settingsAction{nullptr};
-	QAction *m_addSourceAction{nullptr};
-	QAction *m_removeSourceAction{nullptr};
+	QAction *m_sourceSettingsAction{nullptr};
 	QAction *m_moveUpSourceAction{nullptr};
 	QAction *m_moveDownSourceAction{nullptr};
 };

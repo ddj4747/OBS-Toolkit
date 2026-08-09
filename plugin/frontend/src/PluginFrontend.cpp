@@ -54,24 +54,20 @@ bool PluginFrontend::isRunning() {
 PluginFrontend::PluginFrontend(QMainWindow *window) {
 	s_instance = this;
 	m_pluginDock = new PluginDock(window);
-	m_sourceSelectorWindow = new SourceSelectorWindow(window);
 	m_pluginSettingsWindow = new PluginSettingsWindow(window);
 }
 
 PluginFrontend::~PluginFrontend() {
-	if (m_sourceSelectorWindow) {
-		m_sourceSelectorWindow->hide();
-		m_sourceSelectorWindow->detach();
-		m_sourceSelectorWindow = nullptr;
-	}
 	if (m_pluginSettingsWindow) {
 		m_pluginSettingsWindow->hide();
 		m_pluginSettingsWindow = nullptr;
 	}
+
 	if (m_pluginDock) {
 		m_pluginDock->detach();
 		m_pluginDock = nullptr;
 	}
+
 	if (m_settings) {
 		obs_data_release(m_settings);
 		m_settings = nullptr;
@@ -84,24 +80,13 @@ void PluginFrontend::prepareForShutdown() {
 	}
 	m_shutdownPrepared = true;
 
-	if (m_sourceSelectorWindow) {
-		m_sourceSelectorWindow->hide();
-		m_sourceSelectorWindow->detach();
-	}
 	if (m_pluginSettingsWindow) {
 		m_pluginSettingsWindow->hide();
 	}
+
 	if (m_pluginDock) {
 		m_pluginDock->prepareForShutdown();
 	}
-}
-
-void PluginFrontend::hideSourceSelectorWindow() const {
-	if (!m_sourceSelectorWindow->isVisible()) {
-		return;
-	}
-
-	m_sourceSelectorWindow->hide();
 }
 
 void PluginFrontend::hideSettingsWindow() const {
@@ -118,14 +103,6 @@ void PluginFrontend::showSettingsWindow() const {
 	}
 
 	m_pluginSettingsWindow->show();
-}
-
-void PluginFrontend::showSourceSelectorWindow() const {
-	if (m_sourceSelectorWindow->isVisible()) {
-		return;
-	}
-
-	m_sourceSelectorWindow->show();
 }
 
 obs_data_t *PluginFrontend::getSettingsObject() {

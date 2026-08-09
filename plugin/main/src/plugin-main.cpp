@@ -23,6 +23,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <EventManager.h>
 #include <PluginFrontend.h>
+#include <PluginSource.h>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
@@ -59,6 +60,7 @@ void on_frontend_event(const obs_frontend_event event, void *) {
 } // namespace
 
 bool obs_module_load(void) {
+	PluginSource::registerType();
 	obs_frontend_add_event_callback(on_frontend_event, nullptr);
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;

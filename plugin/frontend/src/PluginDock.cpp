@@ -1,4 +1,5 @@
 #include <PluginDock.h>
+#include <PluginSource.h>
 #include <obs-helpers.h>
 #include <FrontendEvents.h>
 #include <PluginFrontend.h>
@@ -14,8 +15,6 @@
 
 namespace {
 const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
-const QString PLUS_ICON_PATH = QStringLiteral("plus.svg");
-const QString REMOVE_ICON_PATH = QStringLiteral("trash.svg");
 const QString SETTINGS_ICON_PATH = QStringLiteral("settings/general.svg");
 const QString ARROW_UP_ICON_PATH = QStringLiteral("up.svg");
 const QString ARROW_DOWN_ICON_PATH = QStringLiteral("down.svg");
@@ -47,12 +46,6 @@ PluginDock::PluginDock(QWidget *parent)
 	  m_sourcesListWidget(new QListWidget(this)),
 	  m_toolbar(new QToolBar(this)) {
 
-	m_addSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath(PLUS_ICON_PATH), "Add New Sources", this,
-						 &PluginDock::onAddSourceClicked);
-	m_removeSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath(REMOVE_ICON_PATH),
-						    "Remove Selected Sources", this,
-						    &PluginDock::onRemoveSourceClicked);
-
 	m_toolbar->addSeparator();
 
 	m_settingsAction = m_toolbar->addAction(obs_helpers::getIconFromPath(SETTINGS_ICON_PATH), "Settings", this,
@@ -67,7 +60,6 @@ PluginDock::PluginDock(QWidget *parent)
 						      "Move Source Downward", this,
 						      &PluginDock::onMoveDownSourceClicked);
 
-	m_removeSourceAction->setEnabled(false);
 	m_moveDownSourceAction->setEnabled(false);
 	m_moveUpSourceAction->setEnabled(false);
 
@@ -148,23 +140,6 @@ const QList<QString> &PluginDock::getSourcesList() const {
 }
 
 bool PluginDock::event(QEvent *event) {
-	if (event->type() == SourceAddedEvent::type) {
-		const SourceAddedEvent *sourceAddedEvent = dynamic_cast<const SourceAddedEvent *>(event);
-		if (!sourceAddedEvent) {
-			return false;
-		}
-
-		for (const auto &source : sourceAddedEvent->names()) {
-			if (m_sourcesList.contains(source)) {
-				continue;
-			}
-
-			m_sourcesList.push_back(source);
-		}
-
-		updateSourcesList();
-	}
-
 	return QWidget::event(event);
 }
 
@@ -190,6 +165,29 @@ void PluginDock::updateSourcesList() {
 
 	m_sourcesListWidget->clear();
 
+	obs_enum_sources(
+		// ReSharper disable once CppParameterMayBeConstPtrOrRef
+		[](void *data, obs_source_t *source) -> bool {
+			PluginDock *dock = static_cast<PluginDock *>(data);
+			if (obs_source_removed(source)) {
+				return true;
+			}
+
+			const char *id = obs_source_get_id(source);
+			if (!id || strcmp(id, PluginSource::id()) != 0) {
+				return true;
+			}
+
+			const QString name = obs_source_get_name(source);
+			if (dock->m_sourcesList.contains(name)) {
+				return true;
+			}
+
+			dock->m_sourcesList.append(name);
+			return true;
+		},
+		this);
+
 	for (qsizetype i = 0; i < m_sourcesList.size(); i++) {
 		const QString &source = m_sourcesList.at(i);
 		obs_source_t *sourcePtr = obs_get_source_by_name(source.toUtf8());
@@ -207,9 +205,7 @@ void PluginDock::updateSourcesList() {
 	}
 
 	updateMinimumDockWidth();
-
 	saveSourcesList();
-	updateAddSourceButtonState();
 }
 
 void PluginDock::updateMinimumDockWidth() {
@@ -226,8 +222,6 @@ void PluginDock::updateMinimumDockWidth() {
 }
 
 void PluginDock::updateActionIcons() const {
-	m_addSourceAction->setIcon(obs_helpers::getIconFromPath(PLUS_ICON_PATH));
-	m_removeSourceAction->setIcon(obs_helpers::getIconFromPath(REMOVE_ICON_PATH));
 	m_settingsAction->setIcon(obs_helpers::getIconFromPath(SETTINGS_ICON_PATH));
 	m_moveUpSourceAction->setIcon(obs_helpers::getIconFromPath(ARROW_UP_ICON_PATH));
 	m_moveDownSourceAction->setIcon(obs_helpers::getIconFromPath(ARROW_DOWN_ICON_PATH));
@@ -279,22 +273,6 @@ void PluginDock::loadSourcesList() {
 	updateSourcesList();
 }
 
-void PluginDock::updateAddSourceButtonState() const {
-	const size_t dockSourcesCount = m_sourcesList.size();
-	size_t sourceCount = 0;
-
-	obs_enum_sources(
-		[](void *param, obs_source_t *) -> bool {
-			size_t *counter = static_cast<size_t *>(param);
-			(*counter)++;
-
-			return true;
-		},
-		&sourceCount);
-
-	m_addSourceAction->setEnabled(dockSourcesCount != sourceCount);
-}
-
 void PluginDock::onSettingsClicked() {
 	if (!PluginFrontend::isRunning()) {
 		return;
@@ -303,33 +281,8 @@ void PluginDock::onSettingsClicked() {
 	PluginFrontend::get()->showSettingsWindow();
 }
 
-void PluginDock::onAddSourceClicked() {
-	if (!PluginFrontend::isRunning()) {
-		return;
-	}
-
-	PluginFrontend::get()->showSourceSelectorWindow();
-}
-
-void PluginDock::onRemoveSourceClicked() {
-	const QList<QListWidgetItem *> selected = m_sourcesListWidget->selectedItems();
-	QList<QString> names(selected.size());
-
-	for (qsizetype i = 0; i < names.size(); ++i) {
-		const auto *elem = selected[i];
-		names[i] = elem->text();
-		m_sourcesList.removeOne(elem->text());
-	}
-
-	QEvent *event = new SourceRemovedEvent(names);
-	EventManager::get()->sendFrontendEvent(event);
-
-	updateSourcesList();
-}
-
 void PluginDock::onSourcesListSelectionChanged() const {
 	const QList<QListWidgetItem *> selected = m_sourcesListWidget->selectedItems();
-	m_removeSourceAction->setEnabled(!selected.empty());
 	m_moveDownSourceAction->setEnabled(!selected.empty());
 	m_moveUpSourceAction->setEnabled(!selected.empty());
 }
