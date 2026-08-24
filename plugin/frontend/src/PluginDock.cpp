@@ -104,6 +104,15 @@ PluginDock::PluginDock(QWidget *parent)
 
 	connect(m_sourcesListWidget, &QListWidget::itemSelectionChanged, this,
 		&PluginDock::onSourcesListSelectionChanged);
+
+	connect(m_sourcesListWidget, &QListWidget::itemDoubleClicked, this, [](QListWidgetItem *item) {
+		obs_source_t *source = obs_get_source_by_name(item->text().toUtf8());
+		if (!source)
+			return;
+		obs_frontend_open_source_properties(source);
+		obs_source_release(source);
+	});
+
 	loadSourcesList();
 
 	EventManager::get()->addFrontendEventListener(this);

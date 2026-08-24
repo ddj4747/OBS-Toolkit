@@ -17,6 +17,7 @@ void PluginSource::registerType() {
 	info.destroy = OnDestroy;
 	info.get_width = OnGetWidth;
 	info.get_height = OnGetHeight;
+	info.get_properties = OnGetProperties;
 
 	obs_register_source(&info);
 }
@@ -63,4 +64,10 @@ uint32_t PluginSource::OnGetWidth(void *data) {
 
 uint32_t PluginSource::OnGetHeight(void *data) {
 	return static_cast<PluginSource *>(data)->height();
+}
+
+obs_properties_t *PluginSource::OnGetProperties(void *) {
+	obs_properties_t *props = obs_properties_create();
+	obs_properties_add_text(props, "StreamKey", "Stream Key", OBS_TEXT_DEFAULT);
+	return props;
 }

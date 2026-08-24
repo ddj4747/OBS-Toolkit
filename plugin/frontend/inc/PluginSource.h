@@ -1,6 +1,7 @@
 #pragma once
 
 #include <obs-frontend-api.h>
+#include <obs-module.h>
 #include <QString>
 #include <plugin-support.h>
 
@@ -29,6 +30,7 @@ private:
 	static void OnDestroy(void *data);
 	static uint32_t OnGetWidth(void *data);
 	static uint32_t OnGetHeight(void *data);
+	static obs_properties_t *OnGetProperties(void *data);
 
 	NO_DISCARD uint32_t width() const;
 	NO_DISCARD uint32_t height() const;
