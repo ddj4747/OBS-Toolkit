@@ -2,3 +2,4 @@ requirements:
   common:
     - "gtest/1.17.0"
     - "fmt/12.1.0"
+    - "miniupnpc/2.2.5"

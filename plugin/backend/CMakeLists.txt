@@ -1,4 +1,5 @@
 add_library(plugin_backend STATIC)
+find_package(miniupnpc REQUIRED)
 
 file(
   GLOB_RECURSE PLUGIN_BACKEND_SOURCES
@@ -17,7 +18,7 @@ file(
 )
 
 target_sources(plugin_backend PRIVATE ${PLUGIN_BACKEND_SOURCES} ${PLUGIN_BACKEND_HEADERS})
-target_link_libraries(plugin_backend PRIVATE Qt6::Core OBS::libobs plugin_common)
+target_link_libraries(plugin_backend PRIVATE Qt6::Core OBS::libobs plugin_common miniupnpc::miniupnpc)
 target_include_directories(plugin_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 
 if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)

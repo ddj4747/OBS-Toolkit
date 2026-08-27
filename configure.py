@@ -77,6 +77,7 @@ OBS_STUDIO_PATH=
 
 """
 
+
 def pause():
     if os.environ.get("CI"):
         return
@@ -98,11 +99,13 @@ with open(env_file_path, "r") as f:
             key, _, value = line.partition("=")
             os.environ[key.strip()] = value.strip()
 
+
 def check_env_var(name: str):
     if not os.environ.get(name):
         print(f"{name} is not set in \"{env_file_path}\"! Fill it before running this script.")
         pause()
         sys.exit(-1)
+
 
 check_env_var("DISABLE_DEBUG")
 check_env_var("QT_DIR")

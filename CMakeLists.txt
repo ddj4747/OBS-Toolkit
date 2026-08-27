@@ -30,7 +30,7 @@ if(OS_WINDOWS)
   unset(_imported_targets)
 endif()
 
-#add_subdirectory(plugin/backend)
+add_subdirectory(plugin/backend)
 add_subdirectory(plugin/common)
 add_subdirectory(plugin/frontend)
 add_subdirectory(plugin/main)
