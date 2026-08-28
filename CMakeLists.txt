@@ -16,6 +16,20 @@ include(helpers)
 
 list(APPEND CMAKE_PREFIX_PATH $ENV{QT_DIR}/lib/cmake)
 
+file(
+  GLOB _conan_macro_files
+  "${CMAKE_SOURCE_DIR}/build/generators/cmakedeps_macros.cmake"
+  "${CMAKE_SOURCE_DIR}/build/*/generators/cmakedeps_macros.cmake"
+)
+foreach(_conan_macro_file IN LISTS _conan_macro_files)
+  get_filename_component(_conan_generators_dir "${_conan_macro_file}" DIRECTORY)
+  list(PREPEND CMAKE_PREFIX_PATH "${_conan_generators_dir}")
+  message(STATUS "Using Conan dependencies from ${_conan_generators_dir}")
+endforeach()
+unset(_conan_macro_files)
+unset(_conan_macro_file)
+unset(_conan_generators_dir)
+
 find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
 find_package(Qt6 COMPONENTS Widgets Core)
