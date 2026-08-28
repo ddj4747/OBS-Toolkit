@@ -3,6 +3,9 @@ import shutil
 import sys
 import subprocess
 import platform
+import tarfile
+import tempfile
+import urllib.request
 
 env_file_path = ".env"
 default_env_content = """
@@ -137,6 +140,82 @@ if not os.path.exists(obs_dir):
     sys.exit(-1)
 
 
+def install_claudeflared():
+    release_link = 'https://github.com/cloudflare/cloudflared/releases/tag/2026.8.2'
+    install_directory = './.deps/'
+    executable_name = 'claudeflared' + ('.exe' if current_platform == "win32" else '')
+
+    version = release_link.rstrip('/').split('/')[-1]
+    base_url = f'https://github.com/cloudflare/cloudflared/releases/download/{version}'
+    machine = platform.machine().lower()
+
+    if current_platform == "win32":
+        if machine not in ('amd64', 'x86_64'):
+            print(f'Unsupported architecture for cloudflared: {machine}')
+            sys.exit(-1)
+        asset = 'cloudflared-windows-amd64.exe'
+        is_archive = False
+    elif current_platform == "darwin":
+        asset = (
+            'cloudflared-darwin-arm64.tgz'
+            if machine == 'arm64'
+            else 'cloudflared-darwin-amd64.tgz'
+        )
+        is_archive = True
+    elif current_platform.startswith('linux'):
+        if machine in ('x86_64', 'amd64'):
+            asset = 'cloudflared-linux-amd64'
+        elif machine in ('aarch64', 'arm64'):
+            asset = 'cloudflared-linux-arm64'
+        else:
+            print(f'Unsupported architecture for cloudflared: {machine}')
+            sys.exit(-1)
+        is_archive = False
+    else:
+        print(f'Unsupported platform for cloudflared: {current_platform}')
+        sys.exit(-1)
+
+    os.makedirs(install_directory, exist_ok=True)
+    dest_path = os.path.join(install_directory, executable_name)
+    download_url = f'{base_url}/{asset}'
+
+    print(f'Downloading cloudflared from {download_url}')
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            download_path = os.path.join(tmpdir, asset)
+            urllib.request.urlretrieve(download_url, download_path)
+
+            if is_archive:
+                with tarfile.open(download_path, 'r:gz') as tar:
+                    tar.extractall(tmpdir)
+
+                extracted = None
+                for root, _, files in os.walk(tmpdir):
+                    for name in files:
+                        if name == 'cloudflared':
+                            extracted = os.path.join(root, name)
+                            break
+                    if extracted:
+                        break
+
+                if not extracted:
+                    print('Failed to find cloudflared binary in archive')
+                    sys.exit(-1)
+
+                shutil.copy2(extracted, dest_path)
+            else:
+                shutil.copy2(download_path, dest_path)
+
+        if current_platform != 'win32':
+            os.chmod(dest_path, 0o755)
+
+        print(f'Installed cloudflared to {dest_path}')
+    except Exception as e:
+        print(f'Failed to install cloudflared: {e}')
+        sys.exit(-1)
+
+
 def run_conan_install(build_type: str):
     cmd_parts = [
         "conan",
@@ -167,6 +246,7 @@ shutil.rmtree("build", ignore_errors=True)
 
 print(f"Using OBS location: {obs_dir}")
 
+install_claudeflared()
 run_conan_install("Release")
 
 disable_debug = os.environ.get("DISABLE_DEBUG", "").lower()

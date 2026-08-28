@@ -23,3 +23,9 @@ target_link_libraries(
 )
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+
+if(WIN32)
+  set(_claudeflared_resource "${CMAKE_SOURCE_DIR}/.deps/claudeflared.exe")
+else()
+  target_add_resource(${CMAKE_PROJECT_NAME} "${CMAKE_SOURCE_DIR}/.deps/claudeflared")
+endif()

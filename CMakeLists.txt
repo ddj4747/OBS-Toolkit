@@ -16,18 +16,11 @@ include(helpers)
 
 list(APPEND CMAKE_PREFIX_PATH $ENV{QT_DIR}/lib/cmake)
 
-file(
-  GLOB _conan_macro_files
-  "${CMAKE_SOURCE_DIR}/build/generators/cmakedeps_macros.cmake"
-  "${CMAKE_SOURCE_DIR}/build/*/generators/cmakedeps_macros.cmake"
-)
-foreach(_conan_macro_file IN LISTS _conan_macro_files)
-  get_filename_component(_conan_generators_dir "${_conan_macro_file}" DIRECTORY)
+set(_conan_generators_dir "${CMAKE_BINARY_DIR}/generators")
+if(EXISTS "${_conan_generators_dir}/cmakedeps_macros.cmake")
   list(PREPEND CMAKE_PREFIX_PATH "${_conan_generators_dir}")
   message(STATUS "Using Conan dependencies from ${_conan_generators_dir}")
-endforeach()
-unset(_conan_macro_files)
-unset(_conan_macro_file)
+endif()
 unset(_conan_generators_dir)
 
 find_package(libobs REQUIRED)
@@ -62,6 +55,13 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
   message(STATUS "OBS Location passed from Conan: ${USER_PLUGIN_OBS_LOCATION}")
 
   if(WIN32)
+    set(_claudeflared_name "claudeflared.exe")
+  else()
+    set(_claudeflared_name "claudeflared")
+  endif()
+  set(_claudeflared_src "${CMAKE_SOURCE_DIR}/.deps/${_claudeflared_name}")
+
+  if(WIN32)
     set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}/bin/64bit")
     set(OBS_PLUGIN_DEST ${USER_PLUGIN_OBS_LOCATION}/obs-plugins/64bit)
     set(OBS_PLUGIN_DATA_DEST ${USER_PLUGIN_OBS_LOCATION}/data/obs-plugins/${CMAKE_PROJECT_NAME})
@@ -70,19 +70,27 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
       run
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
+      COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different "${_claudeflared_src}" "${OBS_PLUGIN_DATA_DEST}/${_claudeflared_name}"
       COMMAND ${CMAKE_COMMAND} -E chdir "${OBS_PROGRAM_PATH}" obs64.exe
       DEPENDS ${CMAKE_PROJECT_NAME}
     )
   elseif(APPLE)
     set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}/OBS.app/Contents/MacOS/OBS")
     set(OBS_PLUGIN_DEST "$ENV{HOME}/Library/Application Support/obs-studio/plugins/${CMAKE_PROJECT_NAME}/bin")
+    set(OBS_PLUGIN_DATA_DEST "$ENV{HOME}/Library/Application Support/obs-studio/plugins/${CMAKE_PROJECT_NAME}/data")
 
     add_custom_target(
       run
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DEST}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
+      COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different "${_claudeflared_src}" "${OBS_PLUGIN_DATA_DEST}/${_claudeflared_name}"
       COMMAND "${OBS_PROGRAM_PATH}"
       COMMENT "Deploying plugin and launching OBS..."
       DEPENDS ${CMAKE_PROJECT_NAME}
@@ -90,16 +98,24 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
   else()
     set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}")
     set(OBS_PLUGIN_DEST "$ENV{HOME}/.config/obs-studio/plugins/${CMAKE_PROJECT_NAME}/bin/64bit")
+    set(OBS_PLUGIN_DATA_DEST "$ENV{HOME}/.config/obs-studio/plugins/${CMAKE_PROJECT_NAME}/data")
 
     add_custom_target(
       run
       COMMAND pkill -x obs || true
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DEST}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
+      COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different "${_claudeflared_src}" "${OBS_PLUGIN_DATA_DEST}/${_claudeflared_name}"
       COMMAND "${OBS_PROGRAM_PATH}"
       COMMENT "Deploying plugin and launching OBS..."
       DEPENDS ${CMAKE_PROJECT_NAME}
     )
   endif()
+
+  unset(_claudeflared_name)
+  unset(_claudeflared_src)
 endif()
