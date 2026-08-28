@@ -11,6 +11,10 @@ class ConanApplication(ConanFile):
     def layout(self):
         cmake_layout(self)
 
+        build_type = str(self.settings.build_type)
+        self.folders.build = os.path.join("build", build_type)
+        self.folders.generators = os.path.join(self.folders.build, "generators")
+
     def generate(self):
         tc = CMakeToolchain(self)
 

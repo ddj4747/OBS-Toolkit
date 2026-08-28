@@ -54,12 +54,7 @@ set_target_properties(
 if(DEFINED USER_PLUGIN_OBS_LOCATION)
   message(STATUS "OBS Location passed from Conan: ${USER_PLUGIN_OBS_LOCATION}")
 
-  if(WIN32)
-    set(_claudeflared_name "claudeflared.exe")
-  else()
-    set(_claudeflared_name "claudeflared")
-  endif()
-  set(_claudeflared_src "${CMAKE_SOURCE_DIR}/.deps/${_claudeflared_name}")
+  set(PLUGIN_RUNDIR_DATA "${CMAKE_BINARY_DIR}/plugin/main/rundir/$<CONFIG>/${CMAKE_PROJECT_NAME}")
 
   if(WIN32)
     set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}/bin/64bit")
@@ -71,9 +66,7 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
-      COMMAND
-        ${CMAKE_COMMAND} -E copy_if_different "${_claudeflared_src}" "${OBS_PLUGIN_DATA_DEST}/${_claudeflared_name}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGIN_RUNDIR_DATA}" "${OBS_PLUGIN_DATA_DEST}"
       COMMAND ${CMAKE_COMMAND} -E chdir "${OBS_PROGRAM_PATH}" obs64.exe
       DEPENDS ${CMAKE_PROJECT_NAME}
     )
@@ -88,9 +81,7 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
-      COMMAND
-        ${CMAKE_COMMAND} -E copy_if_different "${_claudeflared_src}" "${OBS_PLUGIN_DATA_DEST}/${_claudeflared_name}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGIN_RUNDIR_DATA}" "${OBS_PLUGIN_DATA_DEST}"
       COMMAND "${OBS_PROGRAM_PATH}"
       COMMENT "Deploying plugin and launching OBS..."
       DEPENDS ${CMAKE_PROJECT_NAME}
@@ -107,15 +98,10 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
-      COMMAND
-        ${CMAKE_COMMAND} -E copy_if_different "${_claudeflared_src}" "${OBS_PLUGIN_DATA_DEST}/${_claudeflared_name}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGIN_RUNDIR_DATA}" "${OBS_PLUGIN_DATA_DEST}"
       COMMAND "${OBS_PROGRAM_PATH}"
       COMMENT "Deploying plugin and launching OBS..."
       DEPENDS ${CMAKE_PROJECT_NAME}
     )
   endif()
-
-  unset(_claudeflared_name)
-  unset(_claudeflared_src)
 endif()

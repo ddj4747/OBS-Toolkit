@@ -9,6 +9,7 @@
     {
       "name": "template",
       "hidden": true,
+      "toolchainFile": "${sourceDir}/build/Release/generators/conan_toolchain.cmake",
       "cacheVariables": {
         "ENABLE_FRONTEND_API": false,
         "ENABLE_QT": false

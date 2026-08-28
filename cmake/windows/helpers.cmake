@@ -93,17 +93,35 @@ endfunction()
 
 # Helper function to add a specific resource to a bundle
 function(target_add_resource target resource)
-  message(DEBUG "Add resource '${resource}' to target ${target} at destination '${target_destination}'...")
+  message(DEBUG "Add resource '${resource}' to target ${target}...")
 
-  install(FILES "${resource}" DESTINATION "${target}/data" COMPONENT Runtime)
+  set(_rel_dir "")
+  get_filename_component(_dest_name "${resource}" NAME)
+
+  file(RELATIVE_PATH _rel_to_data "${CMAKE_SOURCE_DIR}/data" "${resource}")
+  if(_rel_to_data AND NOT _rel_to_data MATCHES "^\\.\\.")
+    get_filename_component(_rel_dir "${_rel_to_data}" DIRECTORY)
+    get_filename_component(_dest_name "${_rel_to_data}" NAME)
+  endif()
+
+  if(_rel_dir)
+    set(_install_dest "${target}/data/${_rel_dir}")
+    set(_rundir_dest "${CMAKE_CURRENT_BINARY_DIR}/rundir/$<CONFIG>/${target}/${_rel_dir}")
+  else()
+    set(_install_dest "${target}/data")
+    set(_rundir_dest "${CMAKE_CURRENT_BINARY_DIR}/rundir/$<CONFIG>/${target}")
+  endif()
+
+  install(FILES "${resource}" DESTINATION "${_install_dest}" COMPONENT Runtime)
 
   add_custom_command(
     TARGET ${target}
     POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/rundir/$<CONFIG>/${target}"
-    COMMAND "${CMAKE_COMMAND}" -E copy "${resource}" "${CMAKE_CURRENT_BINARY_DIR}/rundir/$<CONFIG>/${target}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_rundir_dest}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${resource}" "${_rundir_dest}/${_dest_name}"
     COMMENT "Copy ${target} resource ${resource} to rundir"
     VERBATIM
   )
-  source_group("Resources" FILES "${resource}")
+
+  source_group("Resources/${_rel_dir}" FILES "${resource}")
 endfunction()

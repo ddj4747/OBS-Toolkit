@@ -96,8 +96,20 @@ endfunction()
 
 # target_add_resource: Helper function to add a specific resource to a bundle
 function(target_add_resource target resource)
-  message(DEBUG "Add resource ${resource} to target ${target} at destination ${destination}...")
+  message(DEBUG "Add resource ${resource} to target ${target}...")
+
+  set(_rel_dir "")
+  file(RELATIVE_PATH _rel_to_data "${CMAKE_SOURCE_DIR}/data" "${resource}")
+  if(_rel_to_data AND NOT _rel_to_data MATCHES "^\\.\\.")
+    get_filename_component(_rel_dir "${_rel_to_data}" DIRECTORY)
+  endif()
+
   target_sources(${target} PRIVATE "${resource}")
-  set_property(SOURCE "${resource}" PROPERTY MACOSX_PACKAGE_LOCATION Resources)
-  source_group("Resources" FILES "${resource}")
+  if(_rel_dir)
+    set_property(SOURCE "${resource}" PROPERTY MACOSX_PACKAGE_LOCATION "Resources/${_rel_dir}")
+    source_group("Resources/${_rel_dir}" FILES "${resource}")
+  else()
+    set_property(SOURCE "${resource}" PROPERTY MACOSX_PACKAGE_LOCATION Resources)
+    source_group("Resources" FILES "${resource}")
+  endif()
 endfunction()

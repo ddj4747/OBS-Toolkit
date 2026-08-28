@@ -140,10 +140,10 @@ if not os.path.exists(obs_dir):
     sys.exit(-1)
 
 
-def install_claudeflared():
+def install_cloudeflared():
     release_link = 'https://github.com/cloudflare/cloudflared/releases/tag/2026.8.2'
     install_directory = './.deps/'
-    executable_name = 'claudeflared' + ('.exe' if current_platform == "win32" else '')
+    executable_name = 'cloudeflared' + ('.exe' if current_platform == "win32" else '')
 
     version = release_link.rstrip('/').split('/')[-1]
     base_url = f'https://github.com/cloudflare/cloudflared/releases/download/{version}'
@@ -246,7 +246,7 @@ shutil.rmtree("build", ignore_errors=True)
 
 print(f"Using OBS location: {obs_dir}")
 
-install_claudeflared()
+install_cloudeflared()
 run_conan_install("Release")
 
 disable_debug = os.environ.get("DISABLE_DEBUG", "").lower()
