@@ -21,6 +21,11 @@ public:
 	~PortForwarder() override;
 
 	void forward();
+	void close();
+	bool isForwarded() const;
+	uint16_t port() const;
+	Protocol protocol() const;
+	std::optional<std::string> publicAddress() const;
 
 signals:
 	void onPortForwardFinished(bool success);
@@ -45,4 +50,5 @@ private:
 	UPNPUrls m_urls{};
 	IGDdatas m_data{};
 	std::string m_lanAddress;
+	std::string m_publicAddress;
 };

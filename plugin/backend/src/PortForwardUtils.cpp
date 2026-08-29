@@ -59,6 +59,28 @@ void PortForwarder::forward() {
 	});
 }
 
+void PortForwarder::close() {
+	(void)tryClosePortUPnP();
+	m_publicAddress.clear();
+	m_forwarded.store(false);
+}
+
+bool PortForwarder::isForwarded() const {
+	return m_forwarded.load();
+}
+
+uint16_t PortForwarder::port() const {
+	return std::stoi(m_port);
+}
+
+PortForwarder::Protocol PortForwarder::protocol() const {
+	return m_protocol == "TCP" ? Protocol::TCP : Protocol::UDP;
+}
+
+std::optional<std::string> PortForwarder::publicAddress() const {
+	return m_publicAddress.empty() ? std::nullopt : std::optional<std::string>(m_publicAddress);
+}
+
 bool PortForwarder::tryForwardPortUPnP() {
 	int error = 0;
 
@@ -92,6 +114,12 @@ bool PortForwarder::tryForwardPortUPnP() {
 	if (result != UPNPCOMMAND_SUCCESS) {
 		FreeUPNPUrls(&m_urls);
 		return false;
+	}
+
+	char externalIPAddress[40] = {0};
+	if (UPNP_GetExternalIPAddress(m_urls.controlURL, m_data.first.servicetype, externalIPAddress) ==
+	    UPNPCOMMAND_SUCCESS) {
+		m_publicAddress = externalIPAddress;
 	}
 
 	return true;
