@@ -27,11 +27,7 @@ signals:
 
 private:
 	bool tryForwardPortUPnP();
-	bool tryForwardPortClaudeFlared();
-
 	bool tryClosePortUPnP() const;
-	bool tryClosePortClaudeFlared();
-
 	bool tryRenewPortLeaseUPnP() const;
 
 	static constexpr std::chrono::seconds LEASE_RENEW_INTERVAL = std::chrono::seconds(60);
@@ -39,8 +35,6 @@ private:
 
 	std::string m_port;
 	std::string m_protocol;
-
-	bool m_upnpLease{};
 	std::atomic<bool> m_forwarded{};
 
 	QFuture<void> m_forwardFuture;

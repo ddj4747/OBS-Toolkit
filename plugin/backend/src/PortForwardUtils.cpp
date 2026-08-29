@@ -21,12 +21,8 @@ PortForwarder::~PortForwarder() {
 		return;
 	}
 
-	if (m_upnpLease) {
-		tryClosePortUPnP();
-		FreeUPNPUrls(&m_urls);
-	} else {
-		tryClosePortClaudeFlared();
-	}
+	(void)tryClosePortUPnP();
+	FreeUPNPUrls(&m_urls);
 }
 
 void PortForwarder::forward() {
@@ -35,38 +31,27 @@ void PortForwarder::forward() {
 			return;
 		}
 
-		m_upnpLease = true;
-		if (tryForwardPortUPnP()) {
-			goto success;
+		if (!tryForwardPortUPnP()) {
+			QMetaObject::invokeMethod(qApp, [this]() { onPortForwardFinished(false); });
+			m_forwarded.store(false);
+			return;
 		}
 
-		m_upnpLease = false;
-		if (tryForwardPortClaudeFlared()) {
-			goto success;
-		}
-
-		QMetaObject::invokeMethod(qApp, [this]() { onPortForwardFinished(false); });
-		m_forwarded.store(false);
-		return;
-
-	success:
 		QMetaObject::invokeMethod(
 			this,
 			[this]() {
-				if (m_upnpLease) {
-					m_timer->setInterval(LEASE_RENEW_INTERVAL);
-					connect(
-						m_timer, &QTimer::timeout, this,
-						[this]() {
-							if (!m_leaseRenewFuture.isFinished()) {
-								return;
-							}
-							m_leaseRenewFuture = QtConcurrent::run(
-								[this]() { (void)tryRenewPortLeaseUPnP(); });
-						},
-						Qt::UniqueConnection);
-					m_timer->start();
-				}
+				m_timer->setInterval(LEASE_RENEW_INTERVAL);
+				connect(
+					m_timer, &QTimer::timeout, this,
+					[this]() {
+						if (!m_leaseRenewFuture.isFinished()) {
+							return;
+						}
+						m_leaseRenewFuture =
+							QtConcurrent::run([this]() { (void)tryRenewPortLeaseUPnP(); });
+					},
+					Qt::UniqueConnection);
+				m_timer->start();
 
 				emit onPortForwardFinished(true);
 			},
@@ -112,16 +97,8 @@ bool PortForwarder::tryForwardPortUPnP() {
 	return true;
 }
 
-bool PortForwarder::tryForwardPortClaudeFlared() {
-	return false;
-}
-
 bool PortForwarder::tryClosePortUPnP() const {
 	if (!m_forwarded.load()) {
-		return true;
-	}
-
-	if (!m_upnpLease) {
 		return true;
 	}
 
@@ -129,10 +106,6 @@ bool PortForwarder::tryClosePortUPnP() const {
 						  m_protocol.c_str(), nullptr);
 
 	return (result == UPNPCOMMAND_SUCCESS);
-}
-
-bool PortForwarder::tryClosePortClaudeFlared() {
-	return false;
 }
 
 bool PortForwarder::tryRenewPortLeaseUPnP() const {

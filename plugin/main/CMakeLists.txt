@@ -24,17 +24,7 @@ target_link_libraries(
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
 
-file(
-  GLOB_RECURSE PLUGIN_DATA_FILES
-  CONFIGURE_DEPENDS
-  "${CMAKE_SOURCE_DIR}/data/*"
-)
+file(GLOB_RECURSE PLUGIN_DATA_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/data/*")
 foreach(PLUGIN_DATA_FILE IN LISTS PLUGIN_DATA_FILES)
   target_add_resource(${CMAKE_PROJECT_NAME} "${PLUGIN_DATA_FILE}")
 endforeach()
-
-if(WIN32)
-  target_add_resource(${CMAKE_PROJECT_NAME} "${CMAKE_SOURCE_DIR}/.deps/cloudeflared.exe")
-else()
-  target_add_resource(${CMAKE_PROJECT_NAME} "${CMAKE_SOURCE_DIR}/.deps/cloudeflared")
-endif()
