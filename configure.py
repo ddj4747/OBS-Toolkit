@@ -1,11 +1,13 @@
+#!/usr/bin/env python3
+
 import os
 import shutil
 import sys
 import subprocess
 import platform
-import tarfile
 import tempfile
 import urllib.request
+import zipfile
 
 env_file_path = ".env"
 default_env_content = """
@@ -140,6 +142,65 @@ if not os.path.exists(obs_dir):
     sys.exit(-1)
 
 
+def install_go_irl():
+    release_link = 'https://github.com/e04/go-irl/releases/tag/v2.4.0'
+    install_directory = './.deps/'
+    executable_name = 'go-irl' + ('.exe' if current_platform == "win32" else '')
+
+    version = release_link.rstrip('/').split('/')[-1]
+    base_url = f'https://github.com/e04/go-irl/releases/download/{version}'
+    machine = platform.machine().lower()
+
+    if current_platform == "win32":
+        asset = 'go-irl-windows-x64.zip'
+    elif current_platform == "darwin":
+        asset = 'go-irl-macos-arm64.zip'
+    elif current_platform.startswith('linux') and machine in ('x86_64', 'amd64'):
+        asset = 'go-irl-linux-x64.zip'
+    elif current_platform.startswith('linux') and machine in ('aarch64', 'arm64'):
+        asset = 'go-irl-linux-arm64.zip'
+    else:
+        print(f'Unsupported platform for go-irl: {current_platform}')
+        sys.exit(-1)
+
+    os.makedirs(install_directory, exist_ok=True)
+    dest_path = os.path.join(install_directory, executable_name)
+    download_url = f'{base_url}/{asset}'
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            download_path = os.path.join(tmpdir, asset)
+            urllib.request.urlretrieve(download_url, download_path)
+
+            with zipfile.ZipFile(download_path) as archive:
+                archive.extractall(tmpdir)
+
+            extracted = None
+
+            for root, _, files in os.walk(tmpdir):
+                for name in files:
+                    if name == executable_name:
+                        extracted = os.path.join(root, name)
+                        break
+
+                if extracted:
+                    break
+
+            if not extracted:
+                print('Failed to find go-irl binary in archive')
+                sys.exit(-1)
+
+            shutil.copy2(extracted, dest_path)
+
+        if current_platform != 'win32':
+            os.chmod(dest_path, 0o755)
+
+        print(f'Installed go-irl to {dest_path}')
+    except Exception as e:
+        print(f'Failed to install go-irl: {e}')
+        sys.exit(-1)
+
+
 def run_conan_install(build_type: str):
     cmd_parts = [
         "conan",
@@ -170,6 +231,7 @@ shutil.rmtree("build", ignore_errors=True)
 
 print(f"Using OBS location: {obs_dir}")
 
+install_go_irl()
 run_conan_install("Release")
 
 disable_debug = os.environ.get("DISABLE_DEBUG", "").lower()

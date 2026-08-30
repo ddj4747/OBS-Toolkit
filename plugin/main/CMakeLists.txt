@@ -28,3 +28,9 @@ file(GLOB_RECURSE PLUGIN_DATA_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/data/
 foreach(PLUGIN_DATA_FILE IN LISTS PLUGIN_DATA_FILES)
   target_add_resource(${CMAKE_PROJECT_NAME} "${PLUGIN_DATA_FILE}")
 endforeach()
+
+if (WIN32)
+    target_add_resource(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/.deps/go-irl.exe)
+else()
+    target_add_resource(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/.deps/go-irl)
+endif()
