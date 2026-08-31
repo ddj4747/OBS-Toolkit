@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QObject>
+#include <QProcess>
 #include <cstdint>
 #include <string>
 
@@ -7,26 +9,36 @@
 #define NO_DISCARD [[nodiscard]]
 #endif
 
-class QProcess;
+class GoIRL_Process final : public QObject {
+	Q_OBJECT
 
-class GoIRL_Process final {
 public:
-	GoIRL_Process() = delete;
-	~GoIRL_Process();
+	enum class ServerError { FailedToStart, IncorrectInput, Crashed };
 
+	GoIRL_Process() = delete;
 	GoIRL_Process(const GoIRL_Process &) = delete;
-	void operator=(const GoIRL_Process &) = delete;
-	GoIRL_Process(GoIRL_Process &&) = delete;
-	void operator=(GoIRL_Process &&) = delete;
+	GoIRL_Process &operator=(const GoIRL_Process &) = delete;
 
 	explicit GoIRL_Process(uint16_t srtPort);
+	~GoIRL_Process() override;
 
-	bool startServer(const std::string &streamKey);
-	bool stopServer();
+	void startServer(const std::string &streamKey);
+	void stopServer();
 	NO_DISCARD bool running() const;
 
+signals:
+	void serverStarted();
+	void serverStopped();
+	void serverError(ServerError error);
+
 private:
+	void onProcessStarted();
+	void onProcessErrorOccurred(QProcess::ProcessError error);
+	void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+	void terminateProcess();
+	void cleanupProcess();
+
 	QProcess *m_process{nullptr};
 	uint16_t m_srtPort{};
-	std::string m_streamKey{};
+	bool m_stopRequested{false};
 };
