@@ -132,6 +132,57 @@ else:
     cppstd = "20"
     extra_flags = ""
 
+required_packages = []
+package_install_cmd = None
+
+if current_platform.startswith("linux"):
+    os_ids = set()
+
+    try:
+        with open("/etc/os-release", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                value = value.strip().strip("\"'")
+                if key == "ID":
+                    os_ids.add(value)
+                elif key == "ID_LIKE":
+                    os_ids.update(value.split())
+    except OSError:
+        pass
+
+    if os_ids & {"fedora", "rhel", "centos"}:
+        required_packages = [
+            "gcc-c++",
+            "cmake",
+            "ninja-build",
+            "pkgconf-pkg-config",
+            "obs-studio",
+            "obs-studio-devel",
+            "qt6-qtbase-devel",
+            "ffmpeg-free-devel",
+            "simde-devel",
+        ]
+        package_install_cmd = ["sudo", "dnf", "install", "-y"]
+    elif os_ids & {"debian", "ubuntu"}:
+        required_packages = [
+            "build-essential",
+            "cmake",
+            "ninja-build",
+            "pkg-config",
+            "obs-studio",
+            "libobs-dev",
+            "qt6-base-dev",
+            "libavcodec-dev",
+            "libavformat-dev",
+            "libavutil-dev",
+            "libswscale-dev",
+            "libsimde-dev",
+        ]
+        package_install_cmd = ["sudo", "apt-get", "install", "-y"]
+
 common_build_missing = "--build=missing"
 
 obs_dir = os.environ["OBS_STUDIO_PATH"]
@@ -140,6 +191,20 @@ if not os.path.exists(obs_dir):
     print(f"OBS_STUDIO_PATH points to a path that does not exist: \"{obs_dir}\"")
     pause()
     sys.exit(-1)
+
+
+def install_required_packages():
+    if not required_packages:
+        return
+
+    cmd = package_install_cmd + required_packages
+    print(f"Installing required packages: {' '.join(required_packages)}")
+
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        print(f"Failed to install required packages (exit {result.returncode})")
+        pause()
+        sys.exit(result.returncode)
 
 
 def install_go_irl():
@@ -231,6 +296,7 @@ shutil.rmtree("build", ignore_errors=True)
 
 print(f"Using OBS location: {obs_dir}")
 
+install_required_packages()
 install_go_irl()
 run_conan_install("Release")
 
