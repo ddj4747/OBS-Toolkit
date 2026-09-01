@@ -13,6 +13,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 }
 
 struct AVFormatContextDeleter {
@@ -51,6 +52,25 @@ struct SwsContextDeleter {
 
 using SwsContextPtr = std::unique_ptr<SwsContext, SwsContextDeleter>;
 
+struct SwrContextDeleter {
+	void operator()(SwrContext *c) const { swr_free(&c); }
+};
+
+using SwrContextPtr = std::unique_ptr<SwrContext, SwrContextDeleter>;
+
+struct ConvertedAudio {
+	uint8_t *data[AV_NUM_DATA_POINTERS] = {};
+	int capacity = 0;
+	int channels = 0;
+
+	ConvertedAudio() = default;
+	ConvertedAudio(const ConvertedAudio &) = delete;
+	ConvertedAudio &operator=(const ConvertedAudio &) = delete;
+
+	void reset();
+	~ConvertedAudio();
+};
+
 struct ScaledBuffer {
 	uint8_t *data[4] = {nullptr, nullptr, nullptr, nullptr};
 	int lineSize[4] = {0, 0, 0, 0};
@@ -62,17 +82,8 @@ struct ScaledBuffer {
 	ScaledBuffer(const ScaledBuffer &) = delete;
 	ScaledBuffer &operator=(const ScaledBuffer &) = delete;
 
-	void reset() {
-		if (data[0])
-			av_freep(&data[0]);
-		data[1] = data[2] = data[3] = nullptr;
-		lineSize[0] = lineSize[1] = lineSize[2] = lineSize[3] = 0;
-		width = 0;
-		height = 0;
-		srcFormat = AV_PIX_FMT_NONE;
-	}
-
-	~ScaledBuffer() { reset(); }
+	void reset();
+	~ScaledBuffer();
 };
 
 class SRT_FrameReceiver {
@@ -80,7 +91,8 @@ public:
 	SRT_FrameReceiver();
 
 	static void init(uint16_t port);
-	static void connectReceiver(std::function<void(obs_source_frame)> &&frameCallback, std::string passphrase);
+	static void connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
+				    std::function<void(obs_source_audio)> &&audioCallback, std::string passphrase);
 	static void disconnectReceiver();
 	static bool active();
 
@@ -92,6 +104,7 @@ private:
 	void receiveThread(const std::stop_token &token);
 	bool openStream();
 	void submitFrame(AVFrame *frame);
+	void submitAudio(AVFrame *frame);
 	static bool geometryAllowed(int width, int height);
 
 	static SRT_FrameReceiver *s_instance;
@@ -104,6 +117,8 @@ private:
 	static constexpr int64_t c_maxPixels = 3840LL * 2160;
 
 	std::function<void(obs_source_frame)> m_frameCallback;
+	std::function<void(obs_source_audio)> m_audioCallback;
+
 	std::mutex m_callbackMutex;
 
 	std::atomic<bool> m_active{false};
@@ -113,9 +128,16 @@ private:
 	std::string m_passphrase;
 
 	AVCodecContextPtr m_avCodecContext;
+	AVCodecContextPtr m_avAudioCodecContext;
 	AVFormatContextPtr m_avFormatContext;
 	SwsContextPtr m_swsContext;
 	ScaledBuffer m_scaledBuffer;
+	SwrContextPtr m_swrContext;
+	ConvertedAudio m_convertedAudio;
+	AVSampleFormat m_swrSrcFormat = AV_SAMPLE_FMT_NONE;
+	int m_swrSrcRate = 0;
+	int m_swrSrcChannels = 0;
 
 	int m_videoStreamIdx = -1;
+	int m_audioStreamIdx = -1;
 };

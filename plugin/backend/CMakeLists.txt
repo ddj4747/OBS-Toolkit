@@ -1,6 +1,10 @@
 add_library(plugin_backend STATIC)
 find_package(miniupnpc REQUIRED)
-find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale)
+find_package(
+  FFmpeg
+  REQUIRED
+  COMPONENTS avcodec avformat avutil swscale swresample
+)
 
 file(
   GLOB_RECURSE PLUGIN_BACKEND_SOURCES
@@ -30,6 +34,7 @@ target_link_libraries(
     FFmpeg::avformat
     FFmpeg::avutil
     FFmpeg::swscale
+    FFmpeg::swresample
 )
 target_include_directories(plugin_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 

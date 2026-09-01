@@ -9,7 +9,9 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/samplefmt.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 }
 
 SRT_FrameReceiver *SRT_FrameReceiver::s_instance = nullptr;
@@ -39,6 +41,42 @@ video_format ffmpegToObsFormat(const AVPixelFormat format) {
 	}
 }
 
+audio_format ffmpegToObsAudioFormat(const AVSampleFormat format) {
+	switch (format) {
+	case AV_SAMPLE_FMT_FLTP:
+		return AUDIO_FORMAT_FLOAT_PLANAR;
+	case AV_SAMPLE_FMT_FLT:
+		return AUDIO_FORMAT_FLOAT;
+	case AV_SAMPLE_FMT_S16P:
+		return AUDIO_FORMAT_16BIT_PLANAR;
+	case AV_SAMPLE_FMT_S16:
+		return AUDIO_FORMAT_16BIT;
+	default:
+		return AUDIO_FORMAT_UNKNOWN;
+	}
+}
+
+speaker_layout ffmpegToObsSpeakers(const int channels) {
+	switch (channels) {
+	case 1:
+		return SPEAKERS_MONO;
+	case 2:
+		return SPEAKERS_STEREO;
+	case 3:
+		return SPEAKERS_2POINT1;
+	case 4:
+		return SPEAKERS_4POINT0;
+	case 5:
+		return SPEAKERS_4POINT1;
+	case 6:
+		return SPEAKERS_5POINT1;
+	case 8:
+		return SPEAKERS_7POINT1;
+	default:
+		return SPEAKERS_UNKNOWN;
+	}
+}
+
 bool codecAllowed(const AVCodecID codecId) {
 	switch (codecId) {
 	case AV_CODEC_ID_H264:
@@ -50,13 +88,57 @@ bool codecAllowed(const AVCodecID codecId) {
 	}
 }
 
+bool audioCodecAllowed(const AVCodecID codecId) {
+	switch (codecId) {
+	case AV_CODEC_ID_AAC:
+	case AV_CODEC_ID_OPUS:
+	case AV_CODEC_ID_MP3:
+		return true;
+	default:
+		return false;
+	}
+}
+
 } // namespace
+
+void ScaledBuffer::reset() {
+	if (data[0])
+		av_freep(&data[0]);
+
+	data[1] = data[2] = data[3] = nullptr;
+	lineSize[0] = lineSize[1] = lineSize[2] = lineSize[3] = 0;
+	width = 0;
+	height = 0;
+	srcFormat = AV_PIX_FMT_NONE;
+}
+
+ScaledBuffer::~ScaledBuffer() {
+	reset();
+}
+
+void ConvertedAudio::reset() {
+	if (data[0])
+		av_freep(&data[0]);
+
+	for (int i = 0; i < AV_NUM_DATA_POINTERS; i++) {
+		data[i] = nullptr;
+	}
+
+	capacity = 0;
+	channels = 0;
+}
+
+ConvertedAudio::~ConvertedAudio() {
+	reset();
+}
 
 bool SRT_FrameReceiver::geometryAllowed(const int width, const int height) {
 	if (width <= 0 || height <= 0)
 		return false;
+
 	if (width > c_maxWidth || height > c_maxHeight)
 		return false;
+
 	return static_cast<int64_t>(width) * static_cast<int64_t>(height) <= c_maxPixels;
 }
 
@@ -73,7 +155,8 @@ void SRT_FrameReceiver::init(const uint16_t port) {
 	s_initialized.store(true);
 }
 
-void SRT_FrameReceiver::connectReceiver(std::function<void(obs_source_frame)> &&frameCallback, std::string passphrase) {
+void SRT_FrameReceiver::connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
+					std::function<void(obs_source_audio)> &&audioCallback, std::string passphrase) {
 	if (!s_initialized.load() || !s_instance) {
 		obs_log(LOG_ERROR, "SRT_FrameReceiver:connectReceiver: SRT_FrameReceiver object not initialized");
 		return;
@@ -94,6 +177,7 @@ void SRT_FrameReceiver::connectReceiver(std::function<void(obs_source_frame)> &&
 	{
 		std::lock_guard<std::mutex> callbackLock(s_instance->m_callbackMutex);
 		s_instance->m_frameCallback = std::move(frameCallback);
+		s_instance->m_audioCallback = std::move(audioCallback);
 	}
 
 	s_instance->m_passphrase = std::move(passphrase);
@@ -112,6 +196,7 @@ void SRT_FrameReceiver::disconnectReceiver() {
 	{
 		std::lock_guard<std::mutex> callbackLock(s_instance->m_callbackMutex);
 		s_instance->m_frameCallback = nullptr;
+		s_instance->m_audioCallback = nullptr;
 	}
 
 	s_instance->m_active.store(false);
@@ -145,9 +230,16 @@ void SRT_FrameReceiver::stopReceiver() {
 void SRT_FrameReceiver::closeStream() {
 	m_avCodecContext.reset();
 	m_avFormatContext.reset();
+	m_avAudioCodecContext.reset();
 	m_swsContext.reset();
 	m_scaledBuffer.reset();
+	m_swrContext.reset();
+	m_convertedAudio.reset();
+	m_swrSrcFormat = AV_SAMPLE_FMT_NONE;
+	m_swrSrcRate = 0;
+	m_swrSrcChannels = 0;
 	m_videoStreamIdx = -1;
+	m_audioStreamIdx = -1;
 }
 
 void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
@@ -184,6 +276,14 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 			if (avcodec_send_packet(m_avCodecContext.get(), packet.get()) == 0) {
 				while (avcodec_receive_frame(m_avCodecContext.get(), frame.get()) == 0) {
 					submitFrame(frame.get());
+					av_frame_unref(frame.get());
+				}
+			}
+
+		} else if (packet->stream_index == m_audioStreamIdx && m_avAudioCodecContext) {
+			if (avcodec_send_packet(m_avAudioCodecContext.get(), packet.get()) == 0) {
+				while (avcodec_receive_frame(m_avAudioCodecContext.get(), frame.get()) == 0) {
+					submitAudio(frame.get());
 					av_frame_unref(frame.get());
 				}
 			}
@@ -234,10 +334,16 @@ bool SRT_FrameReceiver::openStream() {
 	}
 
 	int videoStreamIdx = -1;
-	for (unsigned i = 0; i < formatContext->nb_streams; i++) {
-		if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+	int audioStreamIdx = -1;
+
+	for (unsigned int i = 0; i < formatContext->nb_streams && (videoStreamIdx == -1 || audioStreamIdx == -1); i++) {
+		if (videoStreamIdx == -1 && formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
 			videoStreamIdx = static_cast<int>(i);
-			break;
+			continue;
+		}
+
+		if (audioStreamIdx == -1 && formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+			audioStreamIdx = static_cast<int>(i);
 		}
 	}
 
@@ -246,48 +352,92 @@ bool SRT_FrameReceiver::openStream() {
 		return false;
 	}
 
-	const AVCodecParameters *par = formatContext->streams[videoStreamIdx]->codecpar;
-	if (!codecAllowed(par->codec_id)) {
-		obs_log(LOG_WARNING, "SRT_FrameReceiver: rejected codec id %d", par->codec_id);
-		return false;
+	if (audioStreamIdx < 0) {
+		obs_log(LOG_WARNING,
+			"SRT_FrameReceiver: no audio stream found in SRT payload, continuing with video-only mode");
 	}
 
-	if (!geometryAllowed(par->width, par->height)) {
-		obs_log(LOG_WARNING, "SRT_FrameReceiver: rejected stream geometry %dx%d", par->width, par->height);
-		return false;
+	{
+		const AVCodecParameters *par = formatContext->streams[videoStreamIdx]->codecpar;
+		if (!codecAllowed(par->codec_id)) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: rejected codec id %d", par->codec_id);
+			return false;
+		}
+
+		if (!geometryAllowed(par->width, par->height)) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: rejected stream geometry %dx%d", par->width,
+				par->height);
+			return false;
+		}
+
+		const AVCodec *codec = avcodec_find_decoder(par->codec_id);
+		if (!codec) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported codec id %d", par->codec_id);
+			return false;
+		}
+
+		AVCodecContextPtr codecContext(avcodec_alloc_context3(codec));
+		if (!codecContext) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_alloc_context3 failed");
+			return false;
+		}
+
+		if (avcodec_parameters_to_context(codecContext.get(), par) < 0) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_parameters_to_context failed");
+			return false;
+		}
+
+		codecContext->max_pixels = c_maxPixels;
+
+		if (avcodec_open2(codecContext.get(), codec, nullptr) < 0) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: failed to open decoder %s", codec->name);
+			return false;
+		}
+
+		m_avCodecContext = std::move(codecContext);
+		m_videoStreamIdx = videoStreamIdx;
+
+		obs_log(LOG_INFO, "SRT_FrameReceiver: connected, video codec: %s (%dx%d)", codec->name, par->width,
+			par->height);
 	}
 
-	const AVCodec *codec = avcodec_find_decoder(par->codec_id);
-	if (!codec) {
-		obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported codec id %d", par->codec_id);
-		return false;
+	if (audioStreamIdx >= 0) {
+		const AVCodecParameters *par = formatContext->streams[audioStreamIdx]->codecpar;
+		if (!audioCodecAllowed(par->codec_id)) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: rejected audio codec id %d", par->codec_id);
+			goto finish;
+		}
+
+		const AVCodec *codec = avcodec_find_decoder(par->codec_id);
+		if (!codec) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported audio codec id %d", par->codec_id);
+			goto finish;
+		}
+
+		AVCodecContextPtr codecContext(avcodec_alloc_context3(codec));
+		if (!codecContext) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_alloc_context3 failed");
+			goto finish;
+		}
+
+		if (avcodec_parameters_to_context(codecContext.get(), par) < 0) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_parameters_to_context failed");
+			goto finish;
+		}
+
+		codecContext->max_pixels = c_maxPixels;
+
+		if (avcodec_open2(codecContext.get(), codec, nullptr) < 0) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: failed to open audio decoder %s", codec->name);
+			goto finish;
+		}
+
+		m_avAudioCodecContext = std::move(codecContext);
+		m_audioStreamIdx = audioStreamIdx;
 	}
 
-	AVCodecContextPtr codecContext(avcodec_alloc_context3(codec));
-	if (!codecContext) {
-		obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_alloc_context3 failed");
-		return false;
-	}
-
-	if (avcodec_parameters_to_context(codecContext.get(), par) < 0) {
-		obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_parameters_to_context failed");
-		return false;
-	}
-
-	codecContext->max_pixels = c_maxPixels;
-
-	if (avcodec_open2(codecContext.get(), codec, nullptr) < 0) {
-		obs_log(LOG_WARNING, "SRT_FrameReceiver: failed to open decoder %s", codec->name);
-		return false;
-	}
-
+finish:
 	m_avFormatContext = std::move(formatContext);
-	m_avCodecContext = std::move(codecContext);
-	m_videoStreamIdx = videoStreamIdx;
-
-	obs_log(LOG_INFO, "SRT_FrameReceiver: connected, video codec: %s (%dx%d)", codec->name, par->width,
-		par->height);
-
 	return true;
 }
 
@@ -366,4 +516,96 @@ void SRT_FrameReceiver::submitFrame(AVFrame *frame) {
 
 	obsFrame.format = VIDEO_FORMAT_I420;
 	callback(obsFrame);
+}
+
+void SRT_FrameReceiver::submitAudio(AVFrame *frame) {
+	std::function<void(obs_source_audio)> callback;
+	{
+		std::lock_guard<std::mutex> callbackLock(m_callbackMutex);
+		callback = m_audioCallback;
+	}
+
+	if (!callback) {
+		return;
+	}
+
+	const speaker_layout speakers = ffmpegToObsSpeakers(frame->ch_layout.nb_channels);
+	if (speakers == SPEAKERS_UNKNOWN) {
+		return;
+	}
+
+	obs_source_audio obsAudio = {};
+	obsAudio.speakers = speakers;
+	obsAudio.timestamp = os_gettime_ns();
+	obsAudio.samples_per_sec = frame->sample_rate;
+
+	const auto srcFormat = static_cast<AVSampleFormat>(frame->format);
+	const audio_format directFmt = ffmpegToObsAudioFormat(srcFormat);
+
+	if (directFmt != AUDIO_FORMAT_UNKNOWN) {
+		obsAudio.frames = frame->nb_samples;
+		obsAudio.format = directFmt;
+		for (int i = 0; i < MAX_AV_PLANES; i++)
+			obsAudio.data[i] = frame->data[i];
+		callback(obsAudio);
+		return;
+	}
+
+	const bool converterStale = !m_swrContext || m_swrSrcFormat != srcFormat ||
+				    m_swrSrcRate != frame->sample_rate ||
+				    m_swrSrcChannels != frame->ch_layout.nb_channels;
+	if (converterStale) {
+		m_swrContext.reset();
+		m_convertedAudio.reset();
+
+		SwrContext *swr = nullptr;
+		if (swr_alloc_set_opts2(&swr, &frame->ch_layout, AV_SAMPLE_FMT_FLTP, frame->sample_rate,
+					&frame->ch_layout, srcFormat, frame->sample_rate, 0, nullptr) < 0 ||
+		    swr_init(swr) < 0) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: swr_alloc_set_opts2/swr_init failed");
+			swr_free(&swr);
+			return;
+		}
+
+		m_swrContext.reset(swr);
+		m_swrSrcFormat = srcFormat;
+		m_swrSrcRate = frame->sample_rate;
+		m_swrSrcChannels = frame->ch_layout.nb_channels;
+	}
+
+	const int outCapacity = swr_get_out_samples(m_swrContext.get(), frame->nb_samples);
+	if (outCapacity <= 0) {
+		return;
+	}
+
+	if (m_convertedAudio.capacity < outCapacity || m_convertedAudio.channels != frame->ch_layout.nb_channels) {
+		m_convertedAudio.reset();
+		if (av_samples_alloc(m_convertedAudio.data, nullptr, frame->ch_layout.nb_channels, outCapacity,
+				     AV_SAMPLE_FMT_FLTP, 0) < 0) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: av_samples_alloc failed");
+			return;
+		}
+
+		m_convertedAudio.capacity = outCapacity;
+		m_convertedAudio.channels = frame->ch_layout.nb_channels;
+	}
+
+	const uint8_t *in[AV_NUM_DATA_POINTERS];
+	for (int i = 0; i < AV_NUM_DATA_POINTERS; i++)
+		in[i] = frame->extended_data[i];
+
+	const int converted = swr_convert(m_swrContext.get(), m_convertedAudio.data, m_convertedAudio.capacity, in,
+					  frame->nb_samples);
+	if (converted <= 0) {
+		obs_log(LOG_WARNING, "SRT_FrameReceiver: swr_convert failed");
+		return;
+	}
+
+	obsAudio.frames = converted;
+	obsAudio.format = AUDIO_FORMAT_FLOAT_PLANAR;
+	for (int i = 0; i < MAX_AV_PLANES; i++) {
+		obsAudio.data[i] = m_convertedAudio.data[i];
+	}
+
+	callback(obsAudio);
 }

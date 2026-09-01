@@ -180,6 +180,7 @@ if current_platform.startswith("linux"):
             "libavformat-dev",
             "libavutil-dev",
             "libswscale-dev",
+            "libswresample-dev",
             "libsimde-dev",
         ]
         package_update_cmd = ["sudo", "apt-get", "update"]
