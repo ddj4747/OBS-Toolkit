@@ -1,8 +1,6 @@
 add_library(plugin_backend STATIC)
 find_package(miniupnpc REQUIRED)
-find_package(PkgConfig REQUIRED)
-
-pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale)
+find_package(FFmpeg REQUIRED COMPONENTS avcodec avformat avutil swscale)
 
 file(
   GLOB_RECURSE PLUGIN_BACKEND_SOURCES
@@ -23,9 +21,17 @@ file(
 target_sources(plugin_backend PRIVATE ${PLUGIN_BACKEND_SOURCES} ${PLUGIN_BACKEND_HEADERS})
 target_link_libraries(
   plugin_backend
-  PRIVATE Qt6::Core OBS::libobs plugin_common miniupnpc::miniupnpc ${FFMPEG_LIBRARIES}
+  PRIVATE
+    Qt6::Core
+    OBS::libobs
+    plugin_common
+    miniupnpc::miniupnpc
+    FFmpeg::avcodec
+    FFmpeg::avformat
+    FFmpeg::avutil
+    FFmpeg::swscale
 )
-target_include_directories(plugin_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc ${FFMPEG_INCLUDE_DIRS})
+target_include_directories(plugin_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 
 set_target_properties(plugin_backend PROPERTIES AUTOMOC ON)
 

@@ -46,7 +46,7 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 	}
 
 	const std::filesystem::path path(serverPath);
-	const QString pathStr(path.u16string());
+	const QString pathStr(path.string().data());
 	bfree(serverPath);
 
 	m_stopRequested = false;

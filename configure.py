@@ -133,6 +133,7 @@ else:
     extra_flags = ""
 
 required_packages = []
+package_update_cmd = None
 package_install_cmd = None
 
 if current_platform.startswith("linux"):
@@ -181,6 +182,7 @@ if current_platform.startswith("linux"):
             "libswscale-dev",
             "libsimde-dev",
         ]
+        package_update_cmd = ["sudo", "apt-get", "update"]
         package_install_cmd = ["sudo", "apt-get", "install", "-y"]
 
 common_build_missing = "--build=missing"
@@ -196,6 +198,14 @@ if not os.path.exists(obs_dir):
 def install_required_packages():
     if not required_packages:
         return
+
+    if package_update_cmd:
+        print("Refreshing package lists...")
+        result = subprocess.run(package_update_cmd)
+        if result.returncode != 0:
+            print(f"Failed to refresh package lists (exit {result.returncode})")
+            pause()
+            sys.exit(result.returncode)
 
     cmd = package_install_cmd + required_packages
     print(f"Installing required packages: {' '.join(required_packages)}")
