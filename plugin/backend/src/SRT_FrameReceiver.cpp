@@ -14,10 +14,6 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
-SRT_FrameReceiver *SRT_FrameReceiver::s_instance = nullptr;
-std::mutex SRT_FrameReceiver::s_mutex{};
-std::atomic<bool> SRT_FrameReceiver::s_initialized{false};
-
 namespace {
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
@@ -142,73 +138,66 @@ bool SRT_FrameReceiver::geometryAllowed(const int width, const int height) {
 	return static_cast<int64_t>(width) * static_cast<int64_t>(height) <= c_maxPixels;
 }
 
-SRT_FrameReceiver::SRT_FrameReceiver() = default;
+SRT_FrameReceiver::SRT_FrameReceiver(const uint16_t port) : m_port(port) {}
 
-void SRT_FrameReceiver::init(const uint16_t port) {
-	std::lock_guard<std::mutex> lock(s_mutex);
-	if (s_instance) {
-		return;
-	}
-
-	s_instance = new SRT_FrameReceiver();
-	s_instance->m_port = port;
-	s_initialized.store(true);
+SRT_FrameReceiver::~SRT_FrameReceiver() {
+	disconnectReceiver();
 }
 
 void SRT_FrameReceiver::connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
 					std::function<void(obs_source_audio)> &&audioCallback, std::string passphrase) {
-	if (!s_initialized.load() || !s_instance) {
-		obs_log(LOG_ERROR, "SRT_FrameReceiver:connectReceiver: SRT_FrameReceiver object not initialized");
-		return;
-	}
-
 	if (passphrase.size() < c_minPassphraseLength) {
 		obs_log(LOG_ERROR, "SRT_FrameReceiver:connectReceiver: passphrase must be at least %zu characters",
 			c_minPassphraseLength);
 		return;
 	}
 
-	std::lock_guard<std::mutex> lock(s_mutex);
+	std::lock_guard<std::mutex> lock(m_mutex);
 
-	if (s_instance->m_active.load()) {
-		s_instance->stopReceiver();
+	if (m_active.load()) {
+		stopReceiver();
 	}
 
 	{
-		std::lock_guard<std::mutex> callbackLock(s_instance->m_callbackMutex);
-		s_instance->m_frameCallback = std::move(frameCallback);
-		s_instance->m_audioCallback = std::move(audioCallback);
+		std::lock_guard<std::mutex> callbackLock(m_callbackMutex);
+		m_frameCallback = std::move(frameCallback);
+		m_audioCallback = std::move(audioCallback);
 	}
 
-	s_instance->m_passphrase = std::move(passphrase);
-	s_instance->m_active.store(true);
-	s_instance->startReceiver();
+	m_passphrase = std::move(passphrase);
+	m_active.store(true);
+	startReceiver();
 }
 
 void SRT_FrameReceiver::disconnectReceiver() {
-	if (!s_initialized.load() || !s_instance) {
-		obs_log(LOG_ERROR, "SRT_FrameReceiver:disconnectReceiver: SRT_FrameReceiver object not initialized");
-		return;
-	}
-
-	std::lock_guard<std::mutex> lock(s_mutex);
+	std::lock_guard<std::mutex> lock(m_mutex);
 
 	{
-		std::lock_guard<std::mutex> callbackLock(s_instance->m_callbackMutex);
-		s_instance->m_frameCallback = nullptr;
-		s_instance->m_audioCallback = nullptr;
+		std::lock_guard<std::mutex> callbackLock(m_callbackMutex);
+		m_frameCallback = nullptr;
+		m_audioCallback = nullptr;
 	}
 
-	s_instance->m_active.store(false);
-	s_instance->stopReceiver();
+	m_active.store(false);
+	stopReceiver();
 }
 
-bool SRT_FrameReceiver::active() {
-	if (!s_initialized.load() || !s_instance) {
-		return false;
+bool SRT_FrameReceiver::active() const {
+	return m_active.load();
+}
+
+uint32_t SRT_FrameReceiver::getBitrate() {
+	const uint64_t byteCount = m_bitCount.exchange(0);
+	const uint64_t currentTime = os_gettime_ns();
+	const uint64_t lastTime = m_bitrateLastCheck.exchange(currentTime);
+	const uint64_t elapsedNs = currentTime - lastTime;
+
+	if (elapsedNs == 0) {
+		m_bitCount.fetch_add(byteCount);
+		return 0;
 	}
 
-	return s_instance->m_active.load();
+	return static_cast<uint32_t>((byteCount * 8 * 1000000000ULL) / elapsedNs);
 }
 
 void SRT_FrameReceiver::startReceiver() {
@@ -252,6 +241,9 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 		return;
 	}
 
+	m_bitCount.store(0);
+	m_bitrateLastCheck.store(os_gettime_ns());
+
 	while (!token.stop_requested()) {
 		if (!m_avFormatContext || !m_avCodecContext) {
 			closeStream();
@@ -270,6 +262,10 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 			obs_log(LOG_WARNING, "SRT_FrameReceiver: read error, reconnecting");
 			closeStream();
 			continue;
+		}
+
+		if (packet->size > 0) {
+			m_bitCount.fetch_add(static_cast<uint64_t>(packet->size));
 		}
 
 		if (packet->stream_index == m_videoStreamIdx && m_avCodecContext) {

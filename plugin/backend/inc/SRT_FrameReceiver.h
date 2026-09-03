@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -86,15 +85,26 @@ struct ScaledBuffer {
 	~ScaledBuffer();
 };
 
+#ifndef NO_DISCARD
+#define NO_DISCARD [[nodiscard]]
+#endif
+
 class SRT_FrameReceiver {
 public:
-	SRT_FrameReceiver();
+	SRT_FrameReceiver() = delete;
+	SRT_FrameReceiver(const SRT_FrameReceiver &) = delete;
+	SRT_FrameReceiver &operator=(const SRT_FrameReceiver &) = delete;
+	SRT_FrameReceiver(SRT_FrameReceiver &&) = delete;
+	SRT_FrameReceiver &operator=(SRT_FrameReceiver &&) = delete;
 
-	static void init(uint16_t port);
-	static void connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
-				    std::function<void(obs_source_audio)> &&audioCallback, std::string passphrase);
-	static void disconnectReceiver();
-	static bool active();
+	explicit SRT_FrameReceiver(uint16_t port);
+	~SRT_FrameReceiver();
+
+	void connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
+			     std::function<void(obs_source_audio)> &&audioCallback, std::string passphrase);
+	void disconnectReceiver();
+	NO_DISCARD bool active() const;
+	uint32_t getBitrate();
 
 private:
 	void startReceiver();
@@ -107,10 +117,6 @@ private:
 	void submitAudio(AVFrame *frame);
 	static bool geometryAllowed(int width, int height);
 
-	static SRT_FrameReceiver *s_instance;
-	static std::mutex s_mutex;
-	static std::atomic<bool> s_initialized;
-
 	static constexpr std::size_t c_minPassphraseLength = 10;
 	static constexpr int c_maxWidth = 4096;
 	static constexpr int c_maxHeight = 4096;
@@ -119,6 +125,7 @@ private:
 	std::function<void(obs_source_frame)> m_frameCallback;
 	std::function<void(obs_source_audio)> m_audioCallback;
 
+	std::mutex m_mutex;
 	std::mutex m_callbackMutex;
 
 	std::atomic<bool> m_active{false};
@@ -135,9 +142,12 @@ private:
 	SwrContextPtr m_swrContext;
 	ConvertedAudio m_convertedAudio;
 	AVSampleFormat m_swrSrcFormat = AV_SAMPLE_FMT_NONE;
+
 	int m_swrSrcRate = 0;
 	int m_swrSrcChannels = 0;
-
 	int m_videoStreamIdx = -1;
 	int m_audioStreamIdx = -1;
+
+	std::atomic<uint64_t> m_bitCount{0};
+	std::atomic<uint64_t> m_bitrateLastCheck{0};
 };

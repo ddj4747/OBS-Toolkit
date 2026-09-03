@@ -31,6 +31,8 @@ endforeach()
 
 if(WIN32)
   target_add_resource(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/.deps/go-irl.exe)
+  target_add_resource(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/.deps/mediamtx.exe)
 else()
   target_add_resource(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/.deps/go-irl)
+  target_add_resource(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/.deps/mediamtx)
 endif()
