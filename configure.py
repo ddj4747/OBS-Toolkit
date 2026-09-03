@@ -8,6 +8,7 @@ import platform
 import tempfile
 import urllib.request
 import zipfile
+import tarfile
 
 env_file_path = ".env"
 default_env_content = """
@@ -217,6 +218,68 @@ def install_required_packages():
         pause()
         sys.exit(result.returncode)
 
+def install_mediamtx():
+    release_link = 'https://github.com/bluenviron/mediamtx/releases/tag/v1.20.1'
+    install_directory = './.deps/'
+    executable_name = 'mediamtx' + ('.exe' if current_platform == "win32" else '')
+
+    version = release_link.rstrip('/').split('/')[-1]
+    base_url = f'https://github.com/bluenviron/mediamtx/releases/download/{version}'
+    machine = platform.machine().lower()
+
+    if current_platform == "win32":
+        asset = f'mediamtx_{version}_windows_amd64.zip'
+    elif current_platform == "darwin":
+        asset = f'mediamtx_{version}_darwin_arm64.tar.gz'
+    elif current_platform.startswith('linux') and machine in ('x86_64', 'amd64'):
+        asset = f'mediamtx_{version}_linux_amd64.tar.gz'
+    elif current_platform.startswith('linux') and machine in ('aarch64', 'arm64'):
+        asset = f'mediamtx_{version}_linux_arm64.tar.gz'
+    else:
+        print(f'Unsupported platform for mediamtx: {current_platform}')
+        sys.exit(-1)
+
+    os.makedirs(install_directory, exist_ok=True)
+    dest_path = os.path.join(install_directory, executable_name)
+    download_url = f'{base_url}/{asset}'
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            download_path = os.path.join(tmpdir, asset)
+            urllib.request.urlretrieve(download_url, download_path)
+
+            if asset.endswith(".zip"):
+                with zipfile.ZipFile(download_path) as archive:
+                    archive.extractall(tmpdir)
+            else:
+                with tarfile.open(download_path, "r:gz") as archive:
+                    archive.extractall(tmpdir)
+
+            extracted = None
+
+            for root, _, files in os.walk(tmpdir):
+                for name in files:
+                    if name == executable_name:
+                        extracted = os.path.join(root, name)
+                        break
+
+                if extracted:
+                    break
+
+            if not extracted:
+                print('Failed to find mediamtx binary in archive')
+                sys.exit(-1)
+
+            shutil.copy2(extracted, dest_path)
+
+        if current_platform != 'win32':
+            os.chmod(dest_path, 0o755)
+
+        print(f'Installed mediamtx to {dest_path}')
+    except Exception as e:
+        print(f'Failed to install mediamtx: {e}')
+        sys.exit(-1)
+
 
 def install_go_irl():
     release_link = 'https://github.com/e04/go-irl/releases/tag/v2.4.0'
@@ -309,6 +372,7 @@ print(f"Using OBS location: {obs_dir}")
 
 install_required_packages()
 install_go_irl()
+install_mediamtx();
 run_conan_install("Release")
 
 disable_debug = os.environ.get("DISABLE_DEBUG", "").lower()
