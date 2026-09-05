@@ -14,12 +14,11 @@ class GoIRL_Process final : public QObject {
 
 public:
 	enum class ServerError { FailedToStart, IncorrectInput, Crashed };
-
 	GoIRL_Process() = delete;
 	GoIRL_Process(const GoIRL_Process &) = delete;
 	GoIRL_Process &operator=(const GoIRL_Process &) = delete;
 
-	explicit GoIRL_Process(uint16_t srtPort);
+	explicit GoIRL_Process(uint16_t port);
 	~GoIRL_Process() override;
 
 	void startServer(const std::string &streamKey);
@@ -39,6 +38,6 @@ private:
 	void cleanupProcess();
 
 	QProcess *m_process{nullptr};
-	uint16_t m_srtPort{};
+	uint16_t m_port{0};
 	bool m_stopRequested{false};
 };

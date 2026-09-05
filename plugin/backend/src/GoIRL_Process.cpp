@@ -9,7 +9,7 @@
 static constexpr int c_stopTimeoutMs = 5000;
 static constexpr std::size_t c_minPassphraseLength = 10;
 
-GoIRL_Process::GoIRL_Process(const uint16_t srtPort) : m_srtPort(srtPort) {}
+GoIRL_Process::GoIRL_Process(const uint16_t port) : m_port(port) {}
 
 GoIRL_Process::~GoIRL_Process() {
 	if (m_process == nullptr) {
@@ -24,7 +24,7 @@ GoIRL_Process::~GoIRL_Process() {
 
 void GoIRL_Process::startServer(const std::string &streamKey) {
 	if (streamKey.size() < c_minPassphraseLength) {
-		obs_log(LOG_ERROR, "go-irl passphrase must be at least %zu characters", c_minPassphraseLength);
+		obs_log(LOG_ERROR, "go-irl streamKey must be at least %zu characters", c_minPassphraseLength);
 		emit serverError(ServerError::IncorrectInput);
 		return;
 	}
@@ -56,8 +56,9 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 	connect(m_process, &QProcess::finished, this, &GoIRL_Process::onProcessFinished);
 
 	m_process->start(pathStr,
-			 {QStringLiteral("-mode=server"), QStringLiteral("-srt-port=") + QString::number(m_srtPort),
-			  QStringLiteral("-passphrase=") + QString::fromStdString(streamKey)});
+			 {QStringLiteral("-mode=server"), QStringLiteral("-srtla-port=") + QString::number(m_port),
+			  QStringLiteral("-srt-port=") + QString::number(8890),
+			  QStringLiteral("-streamId=") + QString::fromStdString(streamKey)});
 }
 
 void GoIRL_Process::stopServer() {

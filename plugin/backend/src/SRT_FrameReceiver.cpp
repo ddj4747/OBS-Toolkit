@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <format>
+#include <utility>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -138,19 +139,16 @@ bool SRT_FrameReceiver::geometryAllowed(const int width, const int height) {
 	return static_cast<int64_t>(width) * static_cast<int64_t>(height) <= c_maxPixels;
 }
 
-SRT_FrameReceiver::SRT_FrameReceiver(const uint16_t port) : m_port(port) {}
+SRT_FrameReceiver::SRT_FrameReceiver(const uint16_t port, std::string streamID)
+	: m_streamID(std::move(streamID)),
+	  m_port(port) {}
 
 SRT_FrameReceiver::~SRT_FrameReceiver() {
 	disconnectReceiver();
 }
 
 void SRT_FrameReceiver::connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
-					std::function<void(obs_source_audio)> &&audioCallback, std::string passphrase) {
-	if (passphrase.size() < c_minPassphraseLength) {
-		obs_log(LOG_ERROR, "SRT_FrameReceiver:connectReceiver: passphrase must be at least %zu characters",
-			c_minPassphraseLength);
-		return;
-	}
+					std::function<void(obs_source_audio)> &&audioCallback) {
 
 	std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -164,7 +162,6 @@ void SRT_FrameReceiver::connectReceiver(std::function<void(obs_source_frame)> &&
 		m_audioCallback = std::move(audioCallback);
 	}
 
-	m_passphrase = std::move(passphrase);
 	m_active.store(true);
 	startReceiver();
 }
@@ -290,11 +287,6 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 }
 
 bool SRT_FrameReceiver::openStream() {
-	if (m_passphrase.size() < c_minPassphraseLength) {
-		obs_log(LOG_ERROR, "SRT_FrameReceiver: refusing to listen without a valid passphrase");
-		return false;
-	}
-
 	AVFormatContext *avFormatContext = avformat_alloc_context();
 	if (!avFormatContext) {
 		obs_log(LOG_WARNING, "SRT_FrameReceiver: avformat_alloc_context failed");
@@ -306,12 +298,10 @@ bool SRT_FrameReceiver::openStream() {
 
 	AVDictionary *options = nullptr;
 	av_dict_set(&options, "mode", "listener", 0);
-	av_dict_set(&options, "passphrase", m_passphrase.c_str(), 0);
-	av_dict_set(&options, "pbkeylen", "16", 0);
 	av_dict_set(&options, "listen_timeout", "5000000", 0);
 	av_dict_set(&options, "rw_timeout", "5000000", 0);
 
-	const std::string url = std::format("srt://127.0.0.1:{}", m_port);
+	const std::string url = std::format("srt://127.0.0.1:{}?streamId={}", m_port, m_streamID);
 	const int ret = avformat_open_input(&avFormatContext, url.c_str(), nullptr, &options);
 	av_dict_free(&options);
 

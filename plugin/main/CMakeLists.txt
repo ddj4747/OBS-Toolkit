@@ -19,7 +19,7 @@ file(
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${PLUGIN_SOURCES} ${PLUGIN_HEADERS})
 target_link_libraries(
   ${CMAKE_PROJECT_NAME}
-  PRIVATE Qt6::Core Qt6::Widgets OBS::obs-frontend-api OBS::libobs plugin_common plugin_frontend
+  PRIVATE Qt6::Core Qt6::Network Qt6::Widgets OBS::obs-frontend-api OBS::libobs plugin_common plugin_frontend
 )
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

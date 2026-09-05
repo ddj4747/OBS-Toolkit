@@ -25,7 +25,7 @@ unset(_conan_generators_dir)
 
 find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
-find_package(Qt6 COMPONENTS Widgets Core)
+find_package(Qt6 COMPONENTS Widgets Core Network)
 
 if(OS_WINDOWS)
   get_property(_imported_targets DIRECTORY PROPERTY IMPORTED_TARGETS)

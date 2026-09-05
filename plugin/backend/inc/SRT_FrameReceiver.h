@@ -97,11 +97,11 @@ public:
 	SRT_FrameReceiver(SRT_FrameReceiver &&) = delete;
 	SRT_FrameReceiver &operator=(SRT_FrameReceiver &&) = delete;
 
-	explicit SRT_FrameReceiver(uint16_t port);
+	explicit SRT_FrameReceiver(uint16_t port, std::string streamID);
 	~SRT_FrameReceiver();
 
 	void connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
-			     std::function<void(obs_source_audio)> &&audioCallback, std::string passphrase);
+			     std::function<void(obs_source_audio)> &&audioCallback);
 	void disconnectReceiver();
 	NO_DISCARD bool active() const;
 	uint32_t getBitrate();
@@ -117,13 +117,13 @@ private:
 	void submitAudio(AVFrame *frame);
 	static bool geometryAllowed(int width, int height);
 
-	static constexpr std::size_t c_minPassphraseLength = 10;
 	static constexpr int c_maxWidth = 4096;
 	static constexpr int c_maxHeight = 4096;
 	static constexpr int64_t c_maxPixels = 3840LL * 2160;
 
 	std::function<void(obs_source_frame)> m_frameCallback;
 	std::function<void(obs_source_audio)> m_audioCallback;
+	std::string m_streamID;
 
 	std::mutex m_mutex;
 	std::mutex m_callbackMutex;
@@ -132,7 +132,6 @@ private:
 	std::atomic<bool> m_interruptStop{false};
 	std::jthread m_frameReceiverThread{};
 	uint16_t m_port{0};
-	std::string m_passphrase;
 
 	AVCodecContextPtr m_avCodecContext;
 	AVCodecContextPtr m_avAudioCodecContext;
