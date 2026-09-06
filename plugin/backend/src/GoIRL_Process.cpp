@@ -3,8 +3,10 @@
 #include <obs-module.h>
 #include <plugin-support.h>
 
+#include <QByteArray>
 #include <filesystem>
 #include <util/bmem.h>
+#include <QThread>
 
 static constexpr int c_stopTimeoutMs = 5000;
 static constexpr std::size_t c_minPassphraseLength = 10;
@@ -23,9 +25,8 @@ GoIRL_Process::~GoIRL_Process() {
 }
 
 void GoIRL_Process::startServer(const std::string &streamKey) {
-	if (streamKey.size() < c_minPassphraseLength) {
-		obs_log(LOG_ERROR, "go-irl streamKey must be at least %zu characters", c_minPassphraseLength);
-		emit serverError(ServerError::IncorrectInput);
+	if (QThread::currentThread() != thread()) {
+		QMetaObject::invokeMethod(this, [this, streamKey] { startServer(streamKey); }, Qt::QueuedConnection);
 		return;
 	}
 
@@ -54,6 +55,16 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 	connect(m_process, &QProcess::started, this, &GoIRL_Process::onProcessStarted);
 	connect(m_process, &QProcess::errorOccurred, this, &GoIRL_Process::onProcessErrorOccurred);
 	connect(m_process, &QProcess::finished, this, &GoIRL_Process::onProcessFinished);
+	connect(m_process, &QProcess::readyReadStandardOutput, this, [this]() {
+		const QByteArray output = m_process->readAllStandardOutput().trimmed();
+		if (!output.isEmpty())
+			obs_log(LOG_INFO, "go-irl: %s", output.constData());
+	});
+	connect(m_process, &QProcess::readyReadStandardError, this, [this]() {
+		const QByteArray output = m_process->readAllStandardError().trimmed();
+		if (!output.isEmpty())
+			obs_log(LOG_WARNING, "go-irl: %s", output.constData());
+	});
 
 	m_process->start(pathStr,
 			 {QStringLiteral("-mode=server"), QStringLiteral("-srtla-port=") + QString::number(m_port),
@@ -62,6 +73,11 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 }
 
 void GoIRL_Process::stopServer() {
+	if (QThread::currentThread() != thread()) {
+		QMetaObject::invokeMethod(this, [this] { stopServer(); }, Qt::QueuedConnection);
+		return;
+	}
+
 	if (m_process == nullptr) {
 		return;
 	}
@@ -88,8 +104,10 @@ void GoIRL_Process::onProcessErrorOccurred(const QProcess::ProcessError error) {
 	emit serverError(ServerError::FailedToStart);
 }
 
-void GoIRL_Process::onProcessFinished(const int /*exitCode*/, const QProcess::ExitStatus /*exitStatus*/) {
+void GoIRL_Process::onProcessFinished(const int exitCode, const QProcess::ExitStatus exitStatus) {
 	const bool requested = m_stopRequested;
+	obs_log(requested ? LOG_INFO : LOG_ERROR, "go-irl exited with code %d (%s)", exitCode,
+		exitStatus == QProcess::NormalExit ? "normal exit" : "crashed");
 	cleanupProcess();
 
 	if (requested) {

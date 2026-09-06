@@ -218,6 +218,7 @@ def install_required_packages():
         pause()
         sys.exit(result.returncode)
 
+
 def install_mediamtx():
     release_link = 'https://github.com/bluenviron/mediamtx/releases/tag/v1.20.1'
     install_directory = './.deps/'
@@ -282,12 +283,12 @@ def install_mediamtx():
 
 
 def install_go_irl():
-    release_link = 'https://github.com/e04/go-irl/releases/tag/v2.4.0'
+    release_link = 'https://github.com/ddj4747/go-irl/releases/tag/v1.0.0'
     install_directory = './.deps/'
     executable_name = 'go-irl' + ('.exe' if current_platform == "win32" else '')
 
     version = release_link.rstrip('/').split('/')[-1]
-    base_url = f'https://github.com/e04/go-irl/releases/download/{version}'
+    base_url = f'https://github.com/ddj4747/go-irl/releases/download/{version}'
     machine = platform.machine().lower()
 
     if current_platform == "win32":

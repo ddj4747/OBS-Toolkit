@@ -25,8 +25,9 @@ file(
 target_sources(plugin_backend PRIVATE ${PLUGIN_BACKEND_SOURCES} ${PLUGIN_BACKEND_HEADERS})
 target_link_libraries(
   plugin_backend
-  PRIVATE
+  PUBLIC
     Qt6::Core
+    Qt6::Network
     OBS::libobs
     plugin_common
     miniupnpc::miniupnpc

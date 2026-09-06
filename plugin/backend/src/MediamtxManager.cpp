@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QUrl>
 #include <QVariant>
+#include <QByteArray>
 #include <QtNetwork/QNetworkReply>
 
 #include <filesystem>
@@ -59,6 +60,16 @@ void MediamtxManager::startServer() {
 	connect(m_process, &QProcess::started, this, &MediamtxManager::onProcessStarted);
 	connect(m_process, &QProcess::errorOccurred, this, &MediamtxManager::onProcessErrorOccurred);
 	connect(m_process, &QProcess::finished, this, &MediamtxManager::onProcessFinished);
+	connect(m_process, &QProcess::readyReadStandardOutput, this, [this]() {
+		const QByteArray output = m_process->readAllStandardOutput().trimmed();
+		if (!output.isEmpty())
+			obs_log(LOG_INFO, "mediamtx: %s", output.constData());
+	});
+	connect(m_process, &QProcess::readyReadStandardError, this, [this]() {
+		const QByteArray output = m_process->readAllStandardError().trimmed();
+		if (!output.isEmpty())
+			obs_log(LOG_WARNING, "mediamtx: %s", output.constData());
+	});
 	m_process->start(pathStr, {configStr});
 }
 
@@ -89,8 +100,10 @@ void MediamtxManager::onProcessErrorOccurred(const QProcess::ProcessError error)
 	emit serverError(ServerError::FailedToStart);
 }
 
-void MediamtxManager::onProcessFinished(const int /*exitCode*/, const QProcess::ExitStatus /*exitStatus*/) {
+void MediamtxManager::onProcessFinished(const int exitCode, const QProcess::ExitStatus exitStatus) {
 	const bool requested = m_stopRequested;
+	obs_log(requested ? LOG_INFO : LOG_ERROR, "mediamtx exited with code %d (%s)", exitCode,
+		exitStatus == QProcess::NormalExit ? "normal exit" : "crashed");
 	cleanupProcess();
 
 	if (requested) {
@@ -139,7 +152,7 @@ void MediamtxManager::addInput(const std::string &streamId, const Protocol proto
 		publishUrl = QString("rtsp://%1:8554/%2").arg(ipStr).arg(encodedName);
 		break;
 	case Protocol::RTMP:
-		publishUrl = QString("rtmp://%1:1935/%2").arg(ipStr).arg(encodedName);
+		publishUrl = QString("rtmp://%1:1935/app/%2").arg(ipStr).arg(encodedName);
 		break;
 	case Protocol::SRT:
 		publishUrl = QString("srt://%1:8890?streamid=publish:%2").arg(ipStr).arg(encodedName);

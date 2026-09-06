@@ -19,7 +19,8 @@ file(
 target_sources(plugin_frontend PRIVATE ${PLUGIN_FRONTEND_SOURCES} ${PLUGIN_FRONTEND_HEADERS})
 target_link_libraries(
   plugin_frontend
-  PRIVATE Qt6::Core Qt6::Widgets OBS::obs-frontend-api OBS::libobs plugin_common
+  PUBLIC plugin_backend
+  PRIVATE Qt6::Core Qt6::Widgets OBS::obs-frontend-api OBS::libobs plugin_common magic_enum::magic_enum
 )
 target_include_directories(plugin_frontend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 

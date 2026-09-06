@@ -12,11 +12,12 @@
 #define NO_DISCARD [[nodiscard]]
 #endif
 
+enum class Protocol : uint8_t { MoQ, SRT, WebRTC, RTSP, RTMP, HLS, MPEGTS, RTP, SRTLA };
+
 class MediamtxManager final : public QObject {
 	Q_OBJECT
 
 public:
-	enum class Protocol : uint8_t { MoQ, SRT, WebRTC, RTSP, RTMP, HLS, MPEGTS, RTP };
 	enum class ServerError { FailedToStart, IncorrectInput, Crashed };
 
 	MediamtxManager();

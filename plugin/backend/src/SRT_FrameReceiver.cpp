@@ -1,6 +1,7 @@
 #include <SRT_FrameReceiver.h>
 #include <plugin-support.h>
 #include <util/platform.h>
+#include <media-io/video-io.h>
 
 #include <chrono>
 #include <format>
@@ -94,6 +95,17 @@ bool audioCodecAllowed(const AVCodecID codecId) {
 	default:
 		return false;
 	}
+}
+
+void setObsColorMetadata(obs_source_frame &obsFrame, const AVFrame *frame) {
+	const video_colorspace colorSpace =
+		frame->colorspace == AVCOL_SPC_SMPTE170M || frame->colorspace == AVCOL_SPC_BT470BG ? VIDEO_CS_601
+												   : VIDEO_CS_709;
+	const video_range_type range = frame->color_range == AVCOL_RANGE_JPEG ? VIDEO_RANGE_FULL : VIDEO_RANGE_PARTIAL;
+
+	obsFrame.full_range = range == VIDEO_RANGE_FULL;
+	(void)video_format_get_parameters_for_format(colorSpace, range, obsFrame.format, obsFrame.color_matrix,
+						     obsFrame.color_range_min, obsFrame.color_range_max);
 }
 
 } // namespace
@@ -297,11 +309,11 @@ bool SRT_FrameReceiver::openStream() {
 	avFormatContext->interrupt_callback.opaque = &m_interruptStop;
 
 	AVDictionary *options = nullptr;
-	av_dict_set(&options, "mode", "listener", 0);
+	av_dict_set(&options, "mode", "caller", 0);
 	av_dict_set(&options, "listen_timeout", "5000000", 0);
 	av_dict_set(&options, "rw_timeout", "5000000", 0);
 
-	const std::string url = std::format("srt://127.0.0.1:{}?streamId={}", m_port, m_streamID);
+	const std::string url = std::format("srt://127.0.0.1:{}?streamid={}", m_port, m_streamID);
 	const int ret = avformat_open_input(&avFormatContext, url.c_str(), nullptr, &options);
 	av_dict_free(&options);
 
@@ -457,6 +469,7 @@ void SRT_FrameReceiver::submitFrame(AVFrame *frame) {
 		}
 
 		obsFrame.format = directFmt;
+		setObsColorMetadata(obsFrame, frame);
 		callback(obsFrame);
 		return;
 	}
@@ -501,6 +514,7 @@ void SRT_FrameReceiver::submitFrame(AVFrame *frame) {
 	}
 
 	obsFrame.format = VIDEO_FORMAT_I420;
+	setObsColorMetadata(obsFrame, frame);
 	callback(obsFrame);
 }
 
