@@ -28,7 +28,10 @@ target_sources(
 )
 
 target_include_directories(plugin_common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/inc")
-target_link_libraries(plugin_common PUBLIC OBS::libobs OBS::obs-frontend-api Qt6::Core Qt6::Widgets)
+target_link_libraries(
+  plugin_common
+  PUBLIC OBS::libobs OBS::obs-frontend-api Qt6::Core Qt6::Widgets FFmpeg::avcodec FFmpeg::avformat
+)
 
 if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
   set_property(TARGET plugin_common PROPERTY POSITION_INDEPENDENT_CODE ON)

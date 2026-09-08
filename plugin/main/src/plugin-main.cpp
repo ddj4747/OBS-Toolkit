@@ -39,6 +39,8 @@ void prepare_shutdown() {
 	}
 	g_shutdownPrepared = true;
 
+	PluginSource::prepareForShutdown();
+
 	if (PluginFrontend::isRunning()) {
 		PluginFrontend::get()->prepareForShutdown();
 	}
@@ -67,6 +69,8 @@ bool obs_module_load(void) {
 }
 
 void obs_module_unload(void) {
+	prepare_shutdown();
+
 	if (PluginFrontend::isRunning()) {
 		PluginFrontend::stop();
 	}

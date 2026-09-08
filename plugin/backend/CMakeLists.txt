@@ -1,10 +1,5 @@
 add_library(plugin_backend STATIC)
 find_package(miniupnpc REQUIRED)
-find_package(
-  FFmpeg
-  REQUIRED
-  COMPONENTS avcodec avformat avutil swscale swresample
-)
 
 file(
   GLOB_RECURSE PLUGIN_BACKEND_SOURCES

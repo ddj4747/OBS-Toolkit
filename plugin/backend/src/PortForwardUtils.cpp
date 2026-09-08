@@ -32,8 +32,9 @@ void PortForwarder::forward() {
 		}
 
 		if (!tryForwardPortUPnP()) {
-			QMetaObject::invokeMethod(qApp, [this]() { onPortForwardFinished(false); });
 			m_forwarded.store(false);
+			QMetaObject::invokeMethod(
+				this, [this]() { emit onPortForwardFinished(false); }, Qt::QueuedConnection);
 			return;
 		}
 
@@ -41,16 +42,13 @@ void PortForwarder::forward() {
 			this,
 			[this]() {
 				m_timer->setInterval(LEASE_RENEW_INTERVAL);
-				connect(
-					m_timer, &QTimer::timeout, this,
-					[this]() {
-						if (!m_leaseRenewFuture.isFinished()) {
-							return;
-						}
-						m_leaseRenewFuture =
-							QtConcurrent::run([this]() { (void)tryRenewPortLeaseUPnP(); });
-					},
-					Qt::UniqueConnection);
+				connect(m_timer, &QTimer::timeout, this, [this]() {
+					if (!m_leaseRenewFuture.isFinished()) {
+						return;
+					}
+					m_leaseRenewFuture =
+						QtConcurrent::run([this]() { (void)tryRenewPortLeaseUPnP(); });
+				});
 				m_timer->start();
 
 				emit onPortForwardFinished(true);
@@ -79,6 +77,10 @@ PortForwarder::Protocol PortForwarder::protocol() const {
 
 std::optional<std::string> PortForwarder::publicAddress() const {
 	return m_publicAddress.empty() ? std::nullopt : std::optional<std::string>(m_publicAddress);
+}
+
+uint16_t PortForwarder::getAvailablePort() {
+	return 5000; // TODO implement this function
 }
 
 bool PortForwarder::tryForwardPortUPnP() {

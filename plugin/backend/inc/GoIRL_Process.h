@@ -23,6 +23,8 @@ public:
 
 	void startServer(const std::string &streamKey);
 	void stopServer();
+	std::string getStreamUrl(const std::string &publicAddress);
+
 	NO_DISCARD bool running() const;
 
 signals:

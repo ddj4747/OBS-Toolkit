@@ -1,4 +1,6 @@
 #include <SRT_FrameReceiver.h>
+
+#include <algorithm>
 #include <plugin-support.h>
 #include <util/platform.h>
 #include <media-io/video-io.h>
@@ -76,25 +78,11 @@ speaker_layout ffmpegToObsSpeakers(const int channels) {
 }
 
 bool codecAllowed(const AVCodecID codecId) {
-	switch (codecId) {
-	case AV_CODEC_ID_H264:
-	case AV_CODEC_ID_HEVC:
-	case AV_CODEC_ID_AV1:
-		return true;
-	default:
-		return false;
-	}
+	return std::ranges::contains(c_videoCodecs, codecId);
 }
 
 bool audioCodecAllowed(const AVCodecID codecId) {
-	switch (codecId) {
-	case AV_CODEC_ID_AAC:
-	case AV_CODEC_ID_OPUS:
-	case AV_CODEC_ID_MP3:
-		return true;
-	default:
-		return false;
-	}
+	return std::ranges::contains(c_audioCodecs, codecId);
 }
 
 void setObsColorMetadata(obs_source_frame &obsFrame, const AVFrame *frame) {
@@ -151,8 +139,10 @@ bool SRT_FrameReceiver::geometryAllowed(const int width, const int height) {
 	return static_cast<int64_t>(width) * static_cast<int64_t>(height) <= c_maxPixels;
 }
 
-SRT_FrameReceiver::SRT_FrameReceiver(const uint16_t port, std::string streamID)
+SRT_FrameReceiver::SRT_FrameReceiver(const uint16_t port, std::string streamID,
+				     std::map<AVCodecID, const AVCodec *> codecs)
 	: m_streamID(std::move(streamID)),
+	  m_codecs(std::move(codecs)),
 	  m_port(port) {}
 
 SRT_FrameReceiver::~SRT_FrameReceiver() {
@@ -368,7 +358,7 @@ bool SRT_FrameReceiver::openStream() {
 			return false;
 		}
 
-		const AVCodec *codec = avcodec_find_decoder(par->codec_id);
+		const AVCodec *codec = m_codecs[par->codec_id];
 		if (!codec) {
 			obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported codec id %d", par->codec_id);
 			return false;
@@ -406,7 +396,7 @@ bool SRT_FrameReceiver::openStream() {
 			goto finish;
 		}
 
-		const AVCodec *codec = avcodec_find_decoder(par->codec_id);
+		const AVCodec *codec = m_codecs[par->codec_id];
 		if (!codec) {
 			obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported audio codec id %d", par->codec_id);
 			goto finish;

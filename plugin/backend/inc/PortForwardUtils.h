@@ -27,6 +27,8 @@ public:
 	Protocol protocol() const;
 	std::optional<std::string> publicAddress() const;
 
+	static uint16_t getAvailablePort();
+
 signals:
 	void onPortForwardFinished(bool success);
 

@@ -27,6 +27,11 @@ find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
 find_package(Qt6 COMPONENTS Widgets Core Network)
 find_package(magic_enum REQUIRED)
+find_package(
+  FFmpeg
+  REQUIRED
+  COMPONENTS avcodec avformat avutil swscale swresample
+)
 
 if(OS_WINDOWS)
   get_property(_imported_targets DIRECTORY PROPERTY IMPORTED_TARGETS)

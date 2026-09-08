@@ -86,6 +86,10 @@ void GoIRL_Process::stopServer() {
 	m_process->kill();
 }
 
+std::string GoIRL_Process::getStreamUrl(const std::string &publicAddress) {
+	return std::format("srtla://{}:{}", publicAddress, m_port);
+}
+
 bool GoIRL_Process::running() const {
 	return m_process != nullptr && m_process->state() == QProcess::Running;
 }

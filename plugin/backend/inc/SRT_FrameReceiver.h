@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -8,12 +9,25 @@
 #include <thread>
 #include <obs-module.h>
 
+#include <FFmpegCodecUtils.h>
+#include <map>
+
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
 }
+
+constexpr std::array<AVCodecID, 7> c_videoCodecs = {
+	AV_CODEC_ID_H264, AV_CODEC_ID_HEVC,  AV_CODEC_ID_AV1,   AV_CODEC_ID_VP9,
+	AV_CODEC_ID_VP8,  AV_CODEC_ID_MPEG4, AV_CODEC_ID_MJPEG,
+};
+
+constexpr std::array<AVCodecID, 10> c_audioCodecs = {
+	AV_CODEC_ID_AAC, AV_CODEC_ID_OPUS, AV_CODEC_ID_MP3,    AV_CODEC_ID_FLAC,      AV_CODEC_ID_ALAC,
+	AV_CODEC_ID_AC3, AV_CODEC_ID_EAC3, AV_CODEC_ID_VORBIS, AV_CODEC_ID_PCM_S16LE, AV_CODEC_ID_PCM_S24LE,
+};
 
 struct AVFormatContextDeleter {
 	void operator()(AVFormatContext *ctx) const {
@@ -97,12 +111,13 @@ public:
 	SRT_FrameReceiver(SRT_FrameReceiver &&) = delete;
 	SRT_FrameReceiver &operator=(SRT_FrameReceiver &&) = delete;
 
-	explicit SRT_FrameReceiver(uint16_t port, std::string streamID);
+	explicit SRT_FrameReceiver(uint16_t port, std::string streamID, std::map<AVCodecID, const AVCodec *> codecs);
 	~SRT_FrameReceiver();
 
 	void connectReceiver(std::function<void(obs_source_frame)> &&frameCallback,
 			     std::function<void(obs_source_audio)> &&audioCallback);
 	void disconnectReceiver();
+
 	NO_DISCARD bool active() const;
 	uint32_t getBitrate();
 
@@ -124,6 +139,7 @@ private:
 	std::function<void(obs_source_frame)> m_frameCallback;
 	std::function<void(obs_source_audio)> m_audioCallback;
 	std::string m_streamID;
+	std::map<AVCodecID, const AVCodec *> m_codecs;
 
 	std::mutex m_mutex;
 	std::mutex m_callbackMutex;

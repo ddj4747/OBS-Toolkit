@@ -5,7 +5,7 @@ include_guard(GLOBAL)
 # Set C and C++ language standards to C17 and C++17
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 # Set symbols to be hidden by default for C and C++
@@ -74,7 +74,7 @@ set(
   -Wrange-loop-analysis
 )
 
-if(CMAKE_CXX_STANDARD GREATER_EQUAL 20)
+if(CMAKE_CXX_STANDARD GREATER_EQUAL 23)
   list(APPEND _obs_clang_cxx_options -fno-char8_t)
 endif()
 

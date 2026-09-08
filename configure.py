@@ -164,10 +164,12 @@ if current_platform.startswith("linux"):
             "obs-studio",
             "obs-studio-devel",
             "qt6-qtbase-devel",
-            "ffmpeg-free-devel",
+            "ffmpeg",
+            "ffmpeg-devel",
+            "libavcodec-freeworld",
             "simde-devel",
         ]
-        package_install_cmd = ["sudo", "dnf", "install", "-y"]
+        package_install_cmd = ["sudo", "dnf", "install", "-y", "--allowerasing"]
     elif os_ids & {"debian", "ubuntu"}:
         required_packages = [
             "build-essential",
