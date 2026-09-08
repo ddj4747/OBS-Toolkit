@@ -6,13 +6,17 @@
 #include <media-io/video-io.h>
 
 #include <chrono>
+#include <cerrno>
 #include <format>
 #include <utility>
 
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/error.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/samplefmt.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
@@ -24,6 +28,12 @@ namespace {
 int ffmpegInterruptCallback(void *opaque) {
 	const auto *stop = static_cast<const std::atomic<bool> *>(opaque);
 	return (stop != nullptr && stop->load()) ? 1 : 0;
+}
+
+void logFfmpegError(const int level, const char *action, const int errorCode) {
+	char errorBuffer[AV_ERROR_MAX_STRING_SIZE] = {};
+	av_strerror(errorCode, errorBuffer, sizeof(errorBuffer));
+	obs_log(level, "SRT_FrameReceiver: %s: %s", action, errorBuffer);
 }
 
 video_format ffmpegToObsFormat(const AVPixelFormat format) {
@@ -85,6 +95,23 @@ bool audioCodecAllowed(const AVCodecID codecId) {
 	return std::ranges::contains(c_audioCodecs, codecId);
 }
 
+const AVCodec *findSoftwareDecoder(const AVCodecID codecId) {
+	const AVCodec *defaultDecoder = avcodec_find_decoder(codecId);
+	if (defaultDecoder != nullptr && (defaultDecoder->capabilities & AV_CODEC_CAP_HARDWARE) == 0) {
+		return defaultDecoder;
+	}
+
+	void *iterator = nullptr;
+	while (const AVCodec *codec = av_codec_iterate(&iterator)) {
+		if (av_codec_is_decoder(codec) && codec->id == codecId &&
+		    (codec->capabilities & AV_CODEC_CAP_HARDWARE) == 0) {
+			return codec;
+		}
+	}
+
+	return defaultDecoder;
+}
+
 void setObsColorMetadata(obs_source_frame &obsFrame, const AVFrame *frame) {
 	const video_colorspace colorSpace =
 		frame->colorspace == AVCOL_SPC_SMPTE170M || frame->colorspace == AVCOL_SPC_BT470BG ? VIDEO_CS_601
@@ -137,6 +164,137 @@ bool SRT_FrameReceiver::geometryAllowed(const int width, const int height) {
 		return false;
 
 	return static_cast<int64_t>(width) * static_cast<int64_t>(height) <= c_maxPixels;
+}
+
+bool SRT_FrameReceiver::isHardwareFrame(const AVFrame *frame) {
+	if (!frame) {
+		return false;
+	}
+
+	const auto format = static_cast<AVPixelFormat>(frame->format);
+	const AVPixFmtDescriptor *descriptor = av_pix_fmt_desc_get(format);
+	return frame->hw_frames_ctx != nullptr ||
+	       (descriptor != nullptr && (descriptor->flags & AV_PIX_FMT_FLAG_HWACCEL) != 0);
+}
+
+AVPixelFormat SRT_FrameReceiver::selectHardwareFormat(AVCodecContext *codecContext, const AVPixelFormat *formats) {
+	const auto *receiver = static_cast<const SRT_FrameReceiver *>(codecContext->opaque);
+	if (receiver != nullptr && receiver->m_hardwarePixelFormat != AV_PIX_FMT_NONE) {
+		for (const AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; ++format) {
+			if (*format == receiver->m_hardwarePixelFormat) {
+				return *format;
+			}
+		}
+	}
+
+	for (const AVPixelFormat *format = formats; *format != AV_PIX_FMT_NONE; ++format) {
+		const AVPixFmtDescriptor *descriptor = av_pix_fmt_desc_get(*format);
+		if (descriptor != nullptr && (descriptor->flags & AV_PIX_FMT_FLAG_HWACCEL) == 0) {
+			return *format;
+		}
+	}
+
+	return AV_PIX_FMT_NONE;
+}
+
+void SRT_FrameReceiver::resetHardwareDecoder() {
+	av_buffer_unref(&m_hwDeviceContext);
+	m_hardwarePixelFormat = AV_PIX_FMT_NONE;
+	m_usingHardwareDecoder = false;
+	m_loggedHardwareFrameTransfer = false;
+}
+
+bool SRT_FrameReceiver::configureHardwareDecoder(AVCodecContext *codecContext, const AVCodec *codec) {
+	resetHardwareDecoder();
+
+	for (int configIndex = 0;; ++configIndex) {
+		const AVCodecHWConfig *config = avcodec_get_hw_config(codec, configIndex);
+		if (config == nullptr) {
+			break;
+		}
+
+		if ((config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) == 0 ||
+		    config->device_type == AV_HWDEVICE_TYPE_NONE) {
+			continue;
+		}
+
+		AVBufferRef *deviceContext = nullptr;
+		const int ret = av_hwdevice_ctx_create(&deviceContext, config->device_type, nullptr, nullptr, 0);
+		if (ret < 0) {
+			const char *deviceName = av_hwdevice_get_type_name(config->device_type);
+			char errorBuffer[AV_ERROR_MAX_STRING_SIZE] = {};
+			av_strerror(ret, errorBuffer, sizeof(errorBuffer));
+			obs_log(LOG_DEBUG, "SRT_FrameReceiver: could not initialize %s hardware device: %s",
+				deviceName ? deviceName : "unknown", errorBuffer);
+			continue;
+		}
+
+		AVBufferRef *decoderDeviceContext = av_buffer_ref(deviceContext);
+		if (!decoderDeviceContext) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: could not retain hardware device context");
+			av_buffer_unref(&deviceContext);
+			continue;
+		}
+
+		m_hwDeviceContext = deviceContext;
+		codecContext->hw_device_ctx = decoderDeviceContext;
+		codecContext->opaque = this;
+		codecContext->get_format = selectHardwareFormat;
+		m_hardwarePixelFormat = config->pix_fmt;
+		m_usingHardwareDecoder = true;
+
+		const char *deviceName = av_hwdevice_get_type_name(config->device_type);
+		obs_log(LOG_INFO, "SRT_FrameReceiver: using %s hardware decoding for %s",
+			deviceName ? deviceName : "unknown", codec->name);
+
+		return true;
+	}
+
+	return false;
+}
+
+bool SRT_FrameReceiver::transferHardwareFrame(AVFrame *input, AVFrame *&output) {
+	output = input;
+	if (!isHardwareFrame(input)) {
+		return true;
+	}
+
+	if (!input->hw_frames_ctx) {
+		obs_log(LOG_WARNING, "SRT_FrameReceiver: received a hardware frame without a transfer context");
+		return false;
+	}
+
+	if (!m_loggedHardwareFrameTransfer) {
+		const char *formatName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(input->format));
+		obs_log(LOG_INFO, "SRT_FrameReceiver: transferring %s frames to CPU for OBS",
+			formatName ? formatName : "hardware");
+		m_loggedHardwareFrameTransfer = true;
+	}
+
+	if (!m_cpuTransferFrame) {
+		m_cpuTransferFrame.reset(av_frame_alloc());
+	}
+
+	if (!m_cpuTransferFrame) {
+		obs_log(LOG_ERROR, "SRT_FrameReceiver: failed to allocate CPU transfer frame");
+		return false;
+	}
+
+	av_frame_unref(m_cpuTransferFrame.get());
+	const int ret = av_hwframe_transfer_data(m_cpuTransferFrame.get(), input, 0);
+	if (ret < 0) {
+		logFfmpegError(LOG_WARNING, "hardware frame transfer to CPU failed", ret);
+		return false;
+	}
+
+	if (const int propsRet = av_frame_copy_props(m_cpuTransferFrame.get(), input); propsRet < 0) {
+		logFfmpegError(LOG_WARNING, "copying transferred frame properties failed", propsRet);
+		av_frame_unref(m_cpuTransferFrame.get());
+		return false;
+	}
+
+	output = m_cpuTransferFrame.get();
+	return true;
 }
 
 SRT_FrameReceiver::SRT_FrameReceiver(const uint16_t port, std::string streamID,
@@ -200,6 +358,7 @@ uint32_t SRT_FrameReceiver::getBitrate() {
 }
 
 void SRT_FrameReceiver::startReceiver() {
+	m_forceSoftwareVideoDecoder = false;
 	m_interruptStop.store(false);
 	m_frameReceiverThread = std::jthread([this](const std::stop_token &token) { receiveThread(token); });
 }
@@ -216,7 +375,9 @@ void SRT_FrameReceiver::stopReceiver() {
 }
 
 void SRT_FrameReceiver::closeStream() {
+	m_cpuTransferFrame.reset();
 	m_avCodecContext.reset();
+	resetHardwareDecoder();
 	m_avFormatContext.reset();
 	m_avAudioCodecContext.reset();
 	m_swsContext.reset();
@@ -259,6 +420,8 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 			}
 
 			obs_log(LOG_WARNING, "SRT_FrameReceiver: read error, reconnecting");
+			flushVideoDecoder();
+			flushAudioDecoder();
 			closeStream();
 			continue;
 		}
@@ -268,16 +431,60 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 		}
 
 		if (packet->stream_index == m_videoStreamIdx && m_avCodecContext) {
-			if (avcodec_send_packet(m_avCodecContext.get(), packet.get()) == 0) {
-				while (avcodec_receive_frame(m_avCodecContext.get(), frame.get()) == 0) {
+			bool reconnectWithSoftwareDecoder = false;
+			const int sendRet = avcodec_send_packet(m_avCodecContext.get(), packet.get());
+			if (sendRet < 0) {
+				logFfmpegError(LOG_WARNING, "sending video packet to decoder failed", sendRet);
+			} else {
+				for (;;) {
+					const int receiveRet =
+						avcodec_receive_frame(m_avCodecContext.get(), frame.get());
+					if (receiveRet == AVERROR(EAGAIN) || receiveRet == AVERROR_EOF) {
+						break;
+					}
+
+					if (receiveRet < 0) {
+						logFfmpegError(LOG_WARNING, "receiving video frame from decoder failed",
+							       receiveRet);
+						break;
+					}
+
 					submitFrame(frame.get());
 					av_frame_unref(frame.get());
+
+					if (m_forceSoftwareVideoDecoder) {
+						reconnectWithSoftwareDecoder = true;
+						break;
+					}
 				}
 			}
 
+			if (reconnectWithSoftwareDecoder) {
+				obs_log(LOG_WARNING,
+					"SRT_FrameReceiver: hardware frame transfer failed; reconnecting with software decoding");
+				av_packet_unref(packet.get());
+				closeStream();
+				continue;
+			}
+
 		} else if (packet->stream_index == m_audioStreamIdx && m_avAudioCodecContext) {
-			if (avcodec_send_packet(m_avAudioCodecContext.get(), packet.get()) == 0) {
-				while (avcodec_receive_frame(m_avAudioCodecContext.get(), frame.get()) == 0) {
+			const int sendRet = avcodec_send_packet(m_avAudioCodecContext.get(), packet.get());
+			if (sendRet < 0) {
+				logFfmpegError(LOG_WARNING, "sending audio packet to decoder failed", sendRet);
+			} else {
+				for (;;) {
+					const int receiveRet =
+						avcodec_receive_frame(m_avAudioCodecContext.get(), frame.get());
+					if (receiveRet == AVERROR(EAGAIN) || receiveRet == AVERROR_EOF) {
+						break;
+					}
+
+					if (receiveRet < 0) {
+						logFfmpegError(LOG_WARNING, "receiving audio frame from decoder failed",
+							       receiveRet);
+						break;
+					}
+
 					submitAudio(frame.get());
 					av_frame_unref(frame.get());
 				}
@@ -286,6 +493,142 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 
 		av_packet_unref(packet.get());
 	}
+}
+
+void SRT_FrameReceiver::flushVideoDecoder() {
+	if (!m_avCodecContext) {
+		return;
+	}
+
+	const int sendRet = avcodec_send_packet(m_avCodecContext.get(), nullptr);
+	if (sendRet < 0 && sendRet != AVERROR_EOF) {
+		logFfmpegError(LOG_WARNING, "flushing video decoder failed", sendRet);
+		return;
+	}
+
+	const AVFramePtr frame(av_frame_alloc());
+	if (!frame) {
+		obs_log(LOG_WARNING, "SRT_FrameReceiver: failed to allocate video flush frame");
+		return;
+	}
+
+	for (;;) {
+		const int receiveRet = avcodec_receive_frame(m_avCodecContext.get(), frame.get());
+		if (receiveRet == AVERROR(EAGAIN) || receiveRet == AVERROR_EOF) {
+			break;
+		}
+
+		if (receiveRet < 0) {
+			logFfmpegError(LOG_WARNING, "receiving flushed video frame failed", receiveRet);
+			break;
+		}
+
+		submitFrame(frame.get());
+		av_frame_unref(frame.get());
+	}
+}
+
+void SRT_FrameReceiver::flushAudioDecoder() {
+	if (!m_avAudioCodecContext) {
+		return;
+	}
+
+	const int sendRet = avcodec_send_packet(m_avAudioCodecContext.get(), nullptr);
+	if (sendRet < 0 && sendRet != AVERROR_EOF) {
+		logFfmpegError(LOG_WARNING, "flushing audio decoder failed", sendRet);
+		return;
+	}
+
+	const AVFramePtr frame(av_frame_alloc());
+	if (!frame) {
+		obs_log(LOG_WARNING, "SRT_FrameReceiver: failed to allocate audio flush frame");
+		return;
+	}
+
+	for (;;) {
+		const int receiveRet = avcodec_receive_frame(m_avAudioCodecContext.get(), frame.get());
+		if (receiveRet == AVERROR(EAGAIN) || receiveRet == AVERROR_EOF) {
+			break;
+		}
+
+		if (receiveRet < 0) {
+			logFfmpegError(LOG_WARNING, "receiving flushed audio frame failed", receiveRet);
+			break;
+		}
+
+		submitAudio(frame.get());
+		av_frame_unref(frame.get());
+	}
+}
+
+bool SRT_FrameReceiver::openVideoDecoder(const AVCodecParameters *parameters) {
+	const auto selectedCodecIt = m_codecs.find(parameters->codec_id);
+	if (selectedCodecIt == m_codecs.end() || selectedCodecIt->second == nullptr) {
+		obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported video codec id %d", parameters->codec_id);
+		return false;
+	}
+
+	auto createContext = [this, parameters](const AVCodec *codec, const bool enableHardware) -> AVCodecContextPtr {
+		AVCodecContextPtr codecContext(avcodec_alloc_context3(codec));
+		if (!codecContext) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_alloc_context3 failed");
+			return {};
+		}
+
+		const int parametersRet = avcodec_parameters_to_context(codecContext.get(), parameters);
+		if (parametersRet < 0) {
+			logFfmpegError(LOG_WARNING, "copying video codec parameters failed", parametersRet);
+			return {};
+		}
+
+		codecContext->max_pixels = c_maxPixels;
+		if (enableHardware) {
+			(void)configureHardwareDecoder(codecContext.get(), codec);
+		} else {
+			resetHardwareDecoder();
+		}
+
+		const int openRet = avcodec_open2(codecContext.get(), codec, nullptr);
+		if (openRet < 0) {
+			logFfmpegError(LOG_WARNING, "opening video decoder failed", openRet);
+			codecContext.reset();
+			resetHardwareDecoder();
+			return {};
+		}
+
+		return codecContext;
+	};
+
+	const AVCodec *codec = selectedCodecIt->second;
+	AVCodecContextPtr codecContext;
+	if (!m_forceSoftwareVideoDecoder) {
+		codecContext = createContext(codec, true);
+	}
+
+	if (!codecContext) {
+		const AVCodec *softwareCodec = findSoftwareDecoder(parameters->codec_id);
+		if (!softwareCodec) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: no software fallback for video codec id %d",
+				parameters->codec_id);
+			return false;
+		}
+
+		if (softwareCodec != codec) {
+			obs_log(LOG_WARNING, "SRT_FrameReceiver: falling back from decoder %s to %s", codec->name,
+				softwareCodec->name);
+		}
+
+		codec = softwareCodec;
+		codecContext = createContext(codec, false);
+		if (!codecContext) {
+			return false;
+		}
+	}
+
+	m_avCodecContext = std::move(codecContext);
+	obs_log(LOG_INFO, "SRT_FrameReceiver: connected, video codec: %s (%dx%d)%s", codec->name, parameters->width,
+		parameters->height, m_usingHardwareDecoder ? " with hardware acceleration" : "");
+	return true;
 }
 
 bool SRT_FrameReceiver::openStream() {
@@ -358,35 +701,11 @@ bool SRT_FrameReceiver::openStream() {
 			return false;
 		}
 
-		const AVCodec *codec = m_codecs[par->codec_id];
-		if (!codec) {
-			obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported codec id %d", par->codec_id);
+		if (!openVideoDecoder(par)) {
 			return false;
 		}
 
-		AVCodecContextPtr codecContext(avcodec_alloc_context3(codec));
-		if (!codecContext) {
-			obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_alloc_context3 failed");
-			return false;
-		}
-
-		if (avcodec_parameters_to_context(codecContext.get(), par) < 0) {
-			obs_log(LOG_WARNING, "SRT_FrameReceiver: avcodec_parameters_to_context failed");
-			return false;
-		}
-
-		codecContext->max_pixels = c_maxPixels;
-
-		if (avcodec_open2(codecContext.get(), codec, nullptr) < 0) {
-			obs_log(LOG_WARNING, "SRT_FrameReceiver: failed to open decoder %s", codec->name);
-			return false;
-		}
-
-		m_avCodecContext = std::move(codecContext);
 		m_videoStreamIdx = videoStreamIdx;
-
-		obs_log(LOG_INFO, "SRT_FrameReceiver: connected, video codec: %s (%dx%d)", codec->name, par->width,
-			par->height);
 	}
 
 	if (audioStreamIdx >= 0) {
@@ -396,11 +715,12 @@ bool SRT_FrameReceiver::openStream() {
 			goto finish;
 		}
 
-		const AVCodec *codec = m_codecs[par->codec_id];
-		if (!codec) {
+		const auto selectedCodecIt = m_codecs.find(par->codec_id);
+		if (selectedCodecIt == m_codecs.end() || selectedCodecIt->second == nullptr) {
 			obs_log(LOG_WARNING, "SRT_FrameReceiver: unsupported audio codec id %d", par->codec_id);
 			goto finish;
 		}
+		const AVCodec *codec = selectedCodecIt->second;
 
 		AVCodecContextPtr codecContext(avcodec_alloc_context3(codec));
 		if (!codecContext) {
@@ -443,6 +763,13 @@ void SRT_FrameReceiver::submitFrame(AVFrame *frame) {
 	if (!callback) {
 		return;
 	}
+
+	AVFrame *cpuFrame = nullptr;
+	if (!transferHardwareFrame(frame, cpuFrame)) {
+		m_forceSoftwareVideoDecoder = true;
+		return;
+	}
+	frame = cpuFrame;
 
 	obs_source_frame obsFrame = {};
 	obsFrame.width = frame->width;

@@ -15,6 +15,7 @@
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
 }
@@ -128,9 +129,17 @@ private:
 
 	void receiveThread(const std::stop_token &token);
 	bool openStream();
+	bool openVideoDecoder(const AVCodecParameters *parameters);
+	bool configureHardwareDecoder(AVCodecContext *codecContext, const AVCodec *codec);
+	static AVPixelFormat selectHardwareFormat(AVCodecContext *codecContext, const AVPixelFormat *formats);
+	bool transferHardwareFrame(AVFrame *input, AVFrame *&output);
+	void flushVideoDecoder();
+	void flushAudioDecoder();
 	void submitFrame(AVFrame *frame);
 	void submitAudio(AVFrame *frame);
 	static bool geometryAllowed(int width, int height);
+	static bool isHardwareFrame(const AVFrame *frame);
+	void resetHardwareDecoder();
 
 	static constexpr int c_maxWidth = 4096;
 	static constexpr int c_maxHeight = 4096;
@@ -152,6 +161,12 @@ private:
 	AVCodecContextPtr m_avCodecContext;
 	AVCodecContextPtr m_avAudioCodecContext;
 	AVFormatContextPtr m_avFormatContext;
+	AVFramePtr m_cpuTransferFrame;
+	AVBufferRef *m_hwDeviceContext = nullptr;
+	AVPixelFormat m_hardwarePixelFormat = AV_PIX_FMT_NONE;
+	bool m_usingHardwareDecoder = false;
+	bool m_loggedHardwareFrameTransfer = false;
+	bool m_forceSoftwareVideoDecoder = false;
 	SwsContextPtr m_swsContext;
 	ScaledBuffer m_scaledBuffer;
 	SwrContextPtr m_swrContext;

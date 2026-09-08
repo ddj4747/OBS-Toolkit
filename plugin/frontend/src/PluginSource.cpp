@@ -284,7 +284,11 @@ void PluginSource::startFrameReceiver() {
 
 	m_frameReceiver = new SRT_FrameReceiver(SRT_FRAME_RECEIVER_PORT, "test-client", m_selectedCodecs);
 	m_frameReceiver->connectReceiver(
-		[this](const obs_source_frame &frame) { obs_source_output_video(m_source, &frame); },
+		[this](const obs_source_frame &frame) {
+			m_width = frame.width;
+			m_height = frame.height;
+			obs_source_output_video(m_source, &frame);
+		},
 		[this](const obs_source_audio &audio) { obs_source_output_audio(m_source, &audio); });
 }
 
