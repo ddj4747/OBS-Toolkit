@@ -23,6 +23,7 @@ extern "C" {
 }
 
 namespace {
+constexpr auto c_reconnectRetryInterval = std::chrono::seconds(5);
 
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 int ffmpegInterruptCallback(void *opaque) {
@@ -408,7 +409,10 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 		if (!m_avFormatContext || !m_avCodecContext) {
 			closeStream();
 			if (!openStream()) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				const auto retryAt = std::chrono::steady_clock::now() + c_reconnectRetryInterval;
+				while (!token.stop_requested() && std::chrono::steady_clock::now() < retryAt) {
+					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				}
 				continue;
 			}
 		}

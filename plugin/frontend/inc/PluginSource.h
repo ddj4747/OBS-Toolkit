@@ -6,7 +6,7 @@
 #include <plugin-support.h>
 #include <MediamtxManager.h>
 #include <SRT_FrameReceiver.h>
-#include <GoIRL_Process.h>
+#include <StreamHandler.h>
 #include <PortForwardUtils.h>
 #include <atomic>
 #include <map>
@@ -54,19 +54,18 @@ private:
 	void startReceiver();
 	void stopReceiver();
 	void startFrameReceiver();
+	void stopFrameReceiver();
+	void destroyPortForwarder();
+	void destroyStreamHandler();
+	void onPortForwardFinished(PortForwarder *portForwarder, bool success);
+	void startStreamHandler();
 	void prepareInstanceForShutdown();
 
-	void onMediamtxStarted();
-	void onMediamtxStopped();
-	void onMediamtxError(MediamtxManager::ServerError error);
-	void onMediamtxInputAdded(const QString &streamId, const QString &publishUrl);
-	void onMediamtxInputRemoved(const QString &streamId);
-	void onMediamtxInputError(const QString &streamId, const QString &error);
-
-	void onGoIRLStarted();
-	void onGoIRLStopped();
-	void onGoIRLError(GoIRL_Process::ServerError error);
-
+	void onStreamReady(const QString &streamId, const QString &publishUrl);
+	void onStreamAvailable(const QString &streamId);
+	void onStreamUnavailable(const QString &streamId);
+	void onStreamStopped(const QString &streamId);
+	void onStreamError(const QString &streamId, const QString &error);
 	void updateProperties() const;
 
 	obs_source_t *m_source = nullptr;
@@ -77,16 +76,16 @@ private:
 	std::string m_streamId;
 	std::string m_streamUrl;
 	Protocol m_protocol{};
-	Protocol m_lastProtocol{};
 
 	PortForwarder *m_portForwarder{nullptr};
+	PortForwarder *m_secondaryPortForwarder{nullptr};
 	SRT_FrameReceiver *m_frameReceiver{nullptr};
-	GoIRL_Process *m_goirlProcess{nullptr};
+	StreamHandler *m_streamHandler{nullptr};
+	uint8_t m_pendingPortForwards{0};
 
 	std::map<AVCodecID, std::vector<DecoderInfo>> m_decoderInfos;
 	std::map<AVCodecID, const AVCodec *> m_selectedCodecs;
 
-	static MediamtxManager *s_mediamtxManager;
 	static std::mutex s_instancesMutex;
 	static std::set<PluginSource *> s_instances;
 	static std::atomic<bool> s_shutdownPrepared;

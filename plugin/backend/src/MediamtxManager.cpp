@@ -9,6 +9,7 @@
 #include <QByteArray>
 #include <QtNetwork/QNetworkReply>
 
+#include <algorithm>
 #include <filesystem>
 #include <util/bmem.h>
 
@@ -16,6 +17,10 @@ static constexpr int c_stopTimeoutMs = 5000;
 
 MediamtxManager::MediamtxManager() {
 	m_networkAccessManager = new QNetworkAccessManager(this);
+	m_inputStatusTimer = new QTimer(this);
+	m_inputStatusTimer->setInterval(1000);
+	connect(m_inputStatusTimer, &QTimer::timeout, this, &MediamtxManager::pollInputAvailability);
+	m_inputStatusTimer->start();
 }
 
 MediamtxManager::~MediamtxManager() {
@@ -30,6 +35,9 @@ MediamtxManager::~MediamtxManager() {
 }
 
 void MediamtxManager::startServer() {
+	if (m_process != nullptr) {
+		return;
+	}
 
 #ifdef WIN32
 	char *serverPath = obs_module_file("mediamtx.exe");
@@ -43,10 +51,6 @@ void MediamtxManager::startServer() {
 		return;
 	}
 
-	if (m_process != nullptr) {
-		terminateProcess();
-	}
-
 	const std::filesystem::path path(serverPath);
 	const QString pathStr(path.string().data());
 
@@ -56,14 +60,21 @@ void MediamtxManager::startServer() {
 	bfree(serverPath);
 
 	m_stopRequested = false;
+	m_apiReady = false;
 	m_process = new QProcess(this);
 	connect(m_process, &QProcess::started, this, &MediamtxManager::onProcessStarted);
 	connect(m_process, &QProcess::errorOccurred, this, &MediamtxManager::onProcessErrorOccurred);
 	connect(m_process, &QProcess::finished, this, &MediamtxManager::onProcessFinished);
 	connect(m_process, &QProcess::readyReadStandardOutput, this, [this]() {
 		const QByteArray output = m_process->readAllStandardOutput().trimmed();
-		if (!output.isEmpty())
+		if (!output.isEmpty()) {
 			obs_log(LOG_INFO, "mediamtx: %s", output.constData());
+			if (!m_apiReady && output.contains("[API] started with listener")) {
+				m_apiReady = true;
+				emit serverStarted();
+				flushPendingInputs();
+			}
+		}
 	});
 	connect(m_process, &QProcess::readyReadStandardError, this, [this]() {
 		const QByteArray output = m_process->readAllStandardError().trimmed();
@@ -86,8 +97,11 @@ bool MediamtxManager::running() const {
 	return m_process != nullptr && m_process->state() == QProcess::Running;
 }
 
+bool MediamtxManager::ready() const {
+	return running() && m_apiReady;
+}
+
 void MediamtxManager::onProcessStarted() {
-	emit serverStarted();
 }
 
 void MediamtxManager::onProcessErrorOccurred(const QProcess::ProcessError error) {
@@ -131,48 +145,76 @@ void MediamtxManager::cleanupProcess() {
 	m_process->deleteLater();
 	m_process = nullptr;
 	m_stopRequested = false;
+	m_apiReady = false;
+	m_pendingInputs.clear();
+	m_inputs.clear();
 }
 
 void MediamtxManager::addInput(const std::string &streamId, const Protocol protocol, const std::string &ip) {
 	const QString qname = QString::fromStdString(streamId);
 	if (!running()) {
-		emit inputError(qname, QStringLiteral("MediaMTX server is not running"));
+		m_pendingInputs.push_back({streamId, protocol, ip});
+		startServer();
 		return;
 	}
 
+	if (!ready()) {
+		m_pendingInputs.push_back({streamId, protocol, ip});
+		return;
+	}
+
+	addInputWhenReady(streamId, protocol, ip);
+}
+
+void MediamtxManager::flushPendingInputs() {
+	while (!m_pendingInputs.empty()) {
+		const PendingInput input = std::move(m_pendingInputs.front());
+		m_pendingInputs.pop_front();
+		addInputWhenReady(input.streamId, input.protocol, input.ip);
+	}
+}
+
+QString MediamtxManager::pathName(const std::string &streamId, const Protocol protocol) {
+	const QString name = QString::fromStdString(streamId);
+	return protocol == Protocol::RTMP ? QStringLiteral("app/%1").arg(name) : name;
+}
+
+void MediamtxManager::addInputWhenReady(const std::string &streamId, const Protocol protocol, const std::string &ip) {
+	const QString qname = QString::fromStdString(streamId);
 	QJsonObject body;
 	body["source"] = "publisher";
 
 	QString publishUrl;
-	const QString encodedName = QString::fromLatin1(QUrl::toPercentEncoding(qname));
+	const QString mediaPath = pathName(streamId, protocol);
+	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(mediaPath));
 	const QString ipStr = QString::fromStdString(ip);
 
 	switch (protocol) {
 	case Protocol::RTSP:
-		publishUrl = QString("rtsp://%1:8554/%2").arg(ipStr).arg(encodedName);
+		publishUrl = QString("rtsp://%1:8554/%2").arg(ipStr).arg(mediaPath);
 		break;
 	case Protocol::RTMP:
-		publishUrl = QString("rtmp://%1:1935/app/%2").arg(ipStr).arg(encodedName);
+		publishUrl = QString("rtmp://%1:1935/%2").arg(ipStr).arg(mediaPath);
 		break;
 	case Protocol::SRT:
-		publishUrl = QString("srt://%1:8890?streamid=publish:%2").arg(ipStr).arg(encodedName);
+		publishUrl = QString("srt://%1:8890?streamid=publish:%2").arg(ipStr).arg(encodedPathName);
 		break;
 	case Protocol::WebRTC:
-		publishUrl = QString("http://%1:8889/%2/whip").arg(ipStr).arg(encodedName);
+		publishUrl = QString("http://%1:8889/%2/whip").arg(ipStr).arg(mediaPath);
 		break;
 	default:
 		emit inputError(qname, QStringLiteral("Unsupported protocol"));
 		return;
 	}
 
-	const QUrl requestUrl = QString("http://127.0.0.1:9997/v3/config/paths/add/%1").arg(encodedName);
+	const QUrl requestUrl = QString("http://127.0.0.1:9997/v3/config/paths/add/%1").arg(encodedPathName);
 
 	QNetworkRequest request(requestUrl);
 	request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
 	const QJsonDocument doc(body);
 	QNetworkReply *reply = m_networkAccessManager->sendCustomRequest(request, "POST", doc.toJson());
-	connect(reply, &QNetworkReply::finished, this, [this, reply, qname, publishUrl]() {
+	connect(reply, &QNetworkReply::finished, this, [this, reply, qname, publishUrl, streamId, protocol]() {
 		const QVariant status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
 		if (reply->error() != QNetworkReply::NoError || !status.isValid() || status.toInt() / 100 != 2) {
 			const QString error = reply->error() != QNetworkReply::NoError
@@ -182,21 +224,27 @@ void MediamtxManager::addInput(const std::string &streamId, const Protocol proto
 				qUtf8Printable(error));
 			emit inputError(qname, error);
 		} else {
+			m_inputs.insert_or_assign(streamId, std::make_pair(protocol, false));
 			emit inputAdded(qname, publishUrl);
 		}
 		reply->deleteLater();
 	});
 }
 
-void MediamtxManager::removeInput(const std::string &name) {
+void MediamtxManager::removeInput(const std::string &name, const Protocol protocol) {
 	const QString qname = QString::fromStdString(name);
+	std::erase_if(m_pendingInputs, [&name](const PendingInput &input) { return input.streamId == name; });
+	m_inputs.erase(name);
+
 	if (!running()) {
-		emit inputError(qname, QStringLiteral("MediaMTX server is not running"));
+		return;
+	}
+	if (!ready()) {
 		return;
 	}
 
-	const QString encodedName = QString::fromLatin1(QUrl::toPercentEncoding(qname));
-	const QUrl requestUrl = QString("http://127.0.0.1:9997/v3/config/paths/delete/%1").arg(encodedName);
+	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(pathName(name, protocol)));
+	const QUrl requestUrl = QString("http://127.0.0.1:9997/v3/config/paths/delete/%1").arg(encodedPathName);
 
 	QNetworkRequest request(requestUrl);
 	request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -216,4 +264,32 @@ void MediamtxManager::removeInput(const std::string &name) {
 		}
 		reply->deleteLater();
 	});
+}
+
+void MediamtxManager::pollInputAvailability() {
+	if (!ready()) {
+		return;
+	}
+
+	for (const auto &[streamId, input] : m_inputs) {
+		const QString path = QString::fromLatin1(QUrl::toPercentEncoding(pathName(streamId, input.first)));
+		QNetworkReply *reply = m_networkAccessManager->get(
+			QNetworkRequest(QString("http://127.0.0.1:9997/v3/paths/get/%1").arg(path)));
+		connect(reply, &QNetworkReply::finished, this, [this, reply, streamId]() {
+			const auto input = m_inputs.find(streamId);
+			if (input == m_inputs.end()) {
+				reply->deleteLater();
+				return;
+			}
+
+			const QJsonObject status = QJsonDocument::fromJson(reply->readAll()).object();
+			const bool available = reply->error() == QNetworkReply::NoError && status["available"].toBool();
+			if (available != input->second.second) {
+				input->second.second = available;
+				emit available ? inputAvailable(QString::fromStdString(streamId))
+					       : inputUnavailable(QString::fromStdString(streamId));
+			}
+			reply->deleteLater();
+		});
+	}
 }

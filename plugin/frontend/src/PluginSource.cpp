@@ -1,15 +1,58 @@
 #include <PluginSource.h>
 
+#include <GoIRLStreamHandler.h>
+#include <MediamtxStreamHandler.h>
+
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QThread>
 #include <magic_enum/magic_enum.hpp>
+#include <format>
 
 namespace {
-constexpr uint16_t SRT_FRAME_RECEIVER_PORT = 8890;
+constexpr uint16_t SRT_PORT = 8890;
+constexpr uint16_t SRTLA_PORT = 5000;
+constexpr uint16_t RTMP_PORT = 1935;
+constexpr uint16_t RTSP_PORT = 8554;
+constexpr uint16_t WEBRTC_HTTP_PORT = 8889;
+constexpr uint16_t WEBRTC_ICE_PORT = 8189;
+
+struct ForwardingConfig {
+	uint16_t port;
+	PortForwarder::Protocol protocol;
+};
+
+ForwardingConfig forwardingConfigFor(const Protocol protocol) {
+	switch (protocol) {
+	case Protocol::SRTLA:
+		return {SRTLA_PORT, PortForwarder::Protocol::UDP};
+	case Protocol::SRT:
+		return {SRT_PORT, PortForwarder::Protocol::UDP};
+	case Protocol::RTMP:
+		return {RTMP_PORT, PortForwarder::Protocol::TCP};
+	case Protocol::RTSP:
+		return {RTSP_PORT, PortForwarder::Protocol::TCP};
+	case Protocol::WebRTC:
+		return {WEBRTC_HTTP_PORT, PortForwarder::Protocol::TCP};
+	default:
+		return {PortForwarder::getAvailablePort(), PortForwarder::Protocol::UDP};
+	}
+}
+
+void deleteOnOwningThread(QObject *object) {
+	if (!object) {
+		return;
+	}
+
+	if (object->thread() == QThread::currentThread()) {
+		delete object;
+		return;
+	}
+
+	QMetaObject::invokeMethod(object, [object]() { delete object; }, Qt::BlockingQueuedConnection);
+}
 } // namespace
 
-MediamtxManager *PluginSource::s_mediamtxManager = nullptr;
 std::mutex PluginSource::s_instancesMutex;
 std::set<PluginSource *> PluginSource::s_instances;
 std::atomic<bool> PluginSource::s_shutdownPrepared = false;
@@ -55,12 +98,7 @@ void PluginSource::prepareForShutdown() {
 		source->prepareInstanceForShutdown();
 	}
 
-	if (!s_mediamtxManager) {
-		return;
-	}
-
-	delete s_mediamtxManager;
-	s_mediamtxManager = nullptr;
+	MediamtxStreamHandler::prepareForShutdown();
 }
 
 PluginSource::PluginSource(obs_data_t *settings, obs_source_t *source) : m_source(source) {
@@ -80,8 +118,6 @@ PluginSource::PluginSource(obs_data_t *settings, obs_source_t *source) : m_sourc
 
 PluginSource::~PluginSource() {
 	stopReceiver();
-	delete m_goirlProcess;
-	m_goirlProcess = nullptr;
 
 	std::lock_guard<std::mutex> lock(s_instancesMutex);
 	s_instances.erase(this);
@@ -136,6 +172,7 @@ bool PluginSource::readSettings(obs_data_t *settings, PluginSource *source) {
 	source->m_protocol = protocolOpt.value();
 	source->m_streamId = obs_data_get_string(settings, "StreamId");
 	source->m_selectedCodecs = std::move(selectedCodecs);
+
 	return true;
 }
 
@@ -144,126 +181,105 @@ void PluginSource::startReceiver() {
 		return;
 	}
 
-	const uint16_t availablePort = PortForwarder::getAvailablePort();
-	m_portForwarder = new PortForwarder(availablePort, PortForwarder::Protocol::UDP);
-	m_lastProtocol = m_protocol;
+	const auto [port, protocol] = forwardingConfigFor(m_protocol);
+	m_portForwarder = new PortForwarder(port, protocol);
+
+	if (m_protocol == Protocol::WebRTC) {
+		m_secondaryPortForwarder = new PortForwarder(WEBRTC_ICE_PORT, PortForwarder::Protocol::UDP);
+	}
+
+	m_pendingPortForwards = m_secondaryPortForwarder ? 2 : 1;
 	m_running = true;
 
-	QObject::connect(
-		m_portForwarder, &PortForwarder::onPortForwardFinished, [this, availablePort](const bool success) {
-			if (!success) {
-				stopReceiver();
-				return;
-			}
-
-			if (!m_portForwarder) {
-				stopReceiver();
-				return;
-			}
-
-			const std::optional<std::string> publicAddressOpt = m_portForwarder->publicAddress();
-			if (!publicAddressOpt.has_value()) {
-				stopReceiver();
-				return;
-			}
-
-			const std::string &publicAddress = publicAddressOpt.value();
-
-			if (m_protocol == Protocol::SRTLA) {
-				if (!m_goirlProcess) {
-					m_goirlProcess = new GoIRL_Process(availablePort);
-
-					obs_log(LOG_INFO, "Started go-irl");
-
-					QObject::connect(m_goirlProcess, &GoIRL_Process::serverStarted,
-							 [this]() { onGoIRLStarted(); });
-					QObject::connect(m_goirlProcess, &GoIRL_Process::serverStopped,
-							 [this]() { onGoIRLStopped(); });
-					QObject::connect(m_goirlProcess, &GoIRL_Process::serverError,
-							 [this](const GoIRL_Process::ServerError error) {
-								 onGoIRLError(error);
-							 });
-				}
-
-				m_goirlProcess->startServer(m_streamId);
-				m_streamUrl = m_goirlProcess->getStreamUrl(publicAddress);
-
-				updateProperties();
-				startFrameReceiver();
-				return;
-			}
-
-			if (!s_mediamtxManager) {
-				s_mediamtxManager = new MediamtxManager();
-
-				QObject::connect(s_mediamtxManager, &MediamtxManager::serverStarted,
-						 [this]() { onMediamtxStarted(); });
-				QObject::connect(s_mediamtxManager, &MediamtxManager::serverStopped,
-						 [this]() { onMediamtxStopped(); });
-				QObject::connect(s_mediamtxManager, &MediamtxManager::serverError,
-						 [this](const MediamtxManager::ServerError error) {
-							 onMediamtxError(error);
-						 });
-				QObject::connect(s_mediamtxManager, &MediamtxManager::inputAdded,
-						 [this](const QString &streamId, const QString &publishUrl) {
-							 m_streamUrl = publishUrl.toStdString();
-							 onMediamtxInputAdded(streamId, publishUrl);
-
-							 updateProperties();
-						 });
-				QObject::connect(s_mediamtxManager, &MediamtxManager::inputRemoved,
-						 [this](const QString &streamId) { onMediamtxInputRemoved(streamId); });
-				QObject::connect(s_mediamtxManager, &MediamtxManager::inputError,
-						 [this](const QString &streamId, const QString &error) {
-							 onMediamtxInputError(streamId, error);
-						 });
-
-				s_mediamtxManager->startServer();
-			}
-
-			s_mediamtxManager->addInput(m_streamId, m_protocol, publicAddress);
-			startFrameReceiver();
-		});
+	QObject::connect(m_portForwarder, &PortForwarder::onPortForwardFinished, m_portForwarder,
+			 [this, portForwarder = m_portForwarder](const bool success) {
+				 onPortForwardFinished(portForwarder, success);
+			 });
 
 	m_portForwarder->moveToThread(QCoreApplication::instance()->thread());
 	PortForwarder *portForwarder = m_portForwarder;
 	QMetaObject::invokeMethod(portForwarder, [portForwarder]() { portForwarder->forward(); }, Qt::QueuedConnection);
+
+	if (m_secondaryPortForwarder) {
+		QObject::connect(m_secondaryPortForwarder, &PortForwarder::onPortForwardFinished,
+				 m_secondaryPortForwarder,
+				 [this, portForwarder = m_secondaryPortForwarder](const bool success) {
+					 onPortForwardFinished(portForwarder, success);
+				 });
+
+		m_secondaryPortForwarder->moveToThread(QCoreApplication::instance()->thread());
+		PortForwarder *secondaryPortForwarder = m_secondaryPortForwarder;
+		QMetaObject::invokeMethod(
+			secondaryPortForwarder, [secondaryPortForwarder]() { secondaryPortForwarder->forward(); },
+			Qt::QueuedConnection);
+	}
 }
 
-void PluginSource::onMediamtxStarted() {
-	obs_log(LOG_INFO, "mediamtx server started");
+void PluginSource::onPortForwardFinished(PortForwarder *portForwarder, const bool success) {
+	if (!m_running || (portForwarder != m_portForwarder && portForwarder != m_secondaryPortForwarder)) {
+		return;
+	}
+	if (!success || m_pendingPortForwards == 0) {
+		stopReceiver();
+		return;
+	}
+	if (--m_pendingPortForwards == 0) {
+		startStreamHandler();
+	}
 }
 
-void PluginSource::onMediamtxStopped() {
-	obs_log(LOG_INFO, "mediamtx server stopped");
+void PluginSource::startStreamHandler() {
+	const std::optional<std::string> publicAddressOpt = m_portForwarder->publicAddress();
+	if (!publicAddressOpt.has_value()) {
+		stopReceiver();
+		return;
+	}
+
+	destroyStreamHandler();
+	m_streamHandler = m_protocol == Protocol::SRTLA ? static_cast<StreamHandler *>(new GoIRLStreamHandler())
+							: static_cast<StreamHandler *>(new MediamtxStreamHandler());
+	QObject::connect(m_streamHandler, &StreamHandler::streamReady, m_streamHandler,
+			 [this](const QString &streamId, const QString &publishUrl) {
+				 onStreamReady(streamId, publishUrl);
+			 });
+	QObject::connect(m_streamHandler, &StreamHandler::streamAvailable, m_streamHandler,
+			 [this](const QString &streamId) { onStreamAvailable(streamId); });
+	QObject::connect(m_streamHandler, &StreamHandler::streamUnavailable, m_streamHandler,
+			 [this](const QString &streamId) { onStreamUnavailable(streamId); });
+	QObject::connect(m_streamHandler, &StreamHandler::streamStopped, m_streamHandler,
+			 [this](const QString &streamId) { onStreamStopped(streamId); });
+	QObject::connect(m_streamHandler, &StreamHandler::streamError, m_streamHandler,
+			 [this](const QString &streamId, const QString &error) { onStreamError(streamId, error); });
+	m_streamHandler->start(m_streamId, m_protocol, publicAddressOpt.value(), m_portForwarder->port());
 }
 
-void PluginSource::onMediamtxError(const MediamtxManager::ServerError error) {
-	obs_log(LOG_ERROR, "mediamtx server error: %d", static_cast<int>(error));
+void PluginSource::onStreamReady(const QString &streamId, const QString &publishUrl) {
+	if (!m_running || streamId != QString::fromStdString(m_streamId)) {
+		return;
+	}
+
+	m_streamUrl = publishUrl.toStdString();
+	updateProperties();
 }
 
-void PluginSource::onMediamtxInputAdded(const QString &streamId, const QString &publishUrl) {
-	obs_log(LOG_INFO, "mediamtx input '%s' added: %s", qUtf8Printable(streamId), qUtf8Printable(publishUrl));
+void PluginSource::onStreamAvailable(const QString &streamId) {
+	if (m_running && streamId == QString::fromStdString(m_streamId)) {
+		startFrameReceiver();
+	}
 }
 
-void PluginSource::onMediamtxInputRemoved(const QString &streamId) {
-	obs_log(LOG_INFO, "mediamtx input '%s' removed", qUtf8Printable(streamId));
+void PluginSource::onStreamUnavailable(const QString &streamId) {
+	if (streamId == QString::fromStdString(m_streamId)) {
+		stopFrameReceiver();
+	}
 }
 
-void PluginSource::onMediamtxInputError(const QString &streamId, const QString &error) {
-	obs_log(LOG_ERROR, "mediamtx input '%s' error: %s", qUtf8Printable(streamId), qUtf8Printable(error));
+void PluginSource::onStreamStopped(const QString &streamId) {
+	obs_log(LOG_INFO, "stream handler stopped for '%s'", qUtf8Printable(streamId));
 }
 
-void PluginSource::onGoIRLStarted() {
-	obs_log(LOG_INFO, "go-irl SRTLA server started");
-}
-
-void PluginSource::onGoIRLStopped() {
-	obs_log(LOG_INFO, "go-irl SRTLA server stopped");
-}
-
-void PluginSource::onGoIRLError(const GoIRL_Process::ServerError error) {
-	obs_log(LOG_ERROR, "go-irl SRTLA server error: %d", static_cast<int>(error));
+void PluginSource::onStreamError(const QString &streamId, const QString &error) {
+	obs_log(LOG_ERROR, "stream handler error for '%s': %s", qUtf8Printable(streamId), qUtf8Printable(error));
 }
 
 void PluginSource::updateProperties() const {
@@ -282,7 +298,15 @@ void PluginSource::startFrameReceiver() {
 		return;
 	}
 
-	m_frameReceiver = new SRT_FrameReceiver(SRT_FRAME_RECEIVER_PORT, "test-client", m_selectedCodecs);
+	if (m_protocol == Protocol::SRTLA) {
+		m_frameReceiver =
+			new SRT_FrameReceiver(SRT_PORT, std::format("{}-client", m_streamId), m_selectedCodecs);
+	} else {
+		const std::string mediaPath = m_protocol == Protocol::RTMP ? std::format("app/{}", m_streamId)
+									   : m_streamId;
+		m_frameReceiver = new SRT_FrameReceiver(SRT_PORT, std::format("read:{}", mediaPath), m_selectedCodecs);
+	}
+
 	m_frameReceiver->connectReceiver(
 		[this](const obs_source_frame &frame) {
 			m_width = frame.width;
@@ -292,41 +316,61 @@ void PluginSource::startFrameReceiver() {
 		[this](const obs_source_audio &audio) { obs_source_output_audio(m_source, &audio); });
 }
 
+void PluginSource::stopFrameReceiver() {
+	delete m_frameReceiver;
+	m_frameReceiver = nullptr;
+}
+
+void PluginSource::destroyPortForwarder() {
+	PortForwarder *portForwarder = m_portForwarder;
+	PortForwarder *secondaryPortForwarder = m_secondaryPortForwarder;
+	m_portForwarder = nullptr;
+	m_secondaryPortForwarder = nullptr;
+	m_pendingPortForwards = 0;
+	for (PortForwarder *forwarder : {portForwarder, secondaryPortForwarder}) {
+		if (forwarder) {
+			(void)forwarder->disconnect();
+			deleteOnOwningThread(forwarder);
+		}
+	}
+}
+
+void PluginSource::destroyStreamHandler() {
+	StreamHandler *streamHandler = m_streamHandler;
+	m_streamHandler = nullptr;
+	if (!streamHandler) {
+		return;
+	}
+
+	const std::string streamId = m_streamId;
+	if (streamHandler->thread() == QThread::currentThread()) {
+		streamHandler->stop(streamId);
+		delete streamHandler;
+		return;
+	}
+
+	QMetaObject::invokeMethod(
+		streamHandler,
+		[streamHandler, streamId]() {
+			streamHandler->stop(streamId);
+			delete streamHandler;
+		},
+		Qt::BlockingQueuedConnection);
+}
+
 void PluginSource::stopReceiver() {
 	if (!m_running) {
 		return;
 	}
 
 	m_running = false;
-	if (m_frameReceiver) {
-		delete m_frameReceiver;
-		m_frameReceiver = nullptr;
-	}
-
-	if (m_portForwarder) {
-		(void)m_portForwarder->disconnect();
-		if (s_shutdownPrepared.load() && m_portForwarder->thread() == QThread::currentThread()) {
-			delete m_portForwarder;
-		} else {
-			m_portForwarder->deleteLater();
-		}
-		m_portForwarder = nullptr;
-	}
-
-	if (m_lastProtocol == Protocol::SRTLA) {
-		if (m_goirlProcess) {
-			m_goirlProcess->stopServer();
-		}
-	} else if (s_mediamtxManager) {
-		s_mediamtxManager->removeInput(m_streamId);
-	}
+	stopFrameReceiver();
+	destroyPortForwarder();
+	destroyStreamHandler();
 }
 
 void PluginSource::prepareInstanceForShutdown() {
 	stopReceiver();
-
-	delete m_goirlProcess;
-	m_goirlProcess = nullptr;
 }
 
 const char *PluginSource::OnGetName(void *) {

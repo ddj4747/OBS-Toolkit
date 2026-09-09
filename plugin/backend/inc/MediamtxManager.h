@@ -3,9 +3,12 @@
 #include <QObject>
 #include <QProcess>
 #include <QString>
+#include <QTimer>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkRequest>
 #include <cstdint>
+#include <deque>
+#include <map>
 #include <string>
 
 #ifndef NO_DISCARD
@@ -30,25 +33,42 @@ public:
 	void startServer();
 	void stopServer();
 	NO_DISCARD bool running() const;
+	NO_DISCARD bool ready() const;
 	void addInput(const std::string &streamId, Protocol protocol, const std::string &ip);
-	void removeInput(const std::string &streamId);
+	void removeInput(const std::string &streamId, Protocol protocol);
 
 signals:
 	void serverStarted();
 	void serverStopped();
 	void serverError(ServerError error);
 	void inputAdded(const QString &name, const QString &publishUrl);
+	void inputAvailable(const QString &name);
+	void inputUnavailable(const QString &name);
 	void inputRemoved(const QString &name);
 	void inputError(const QString &name, const QString &error);
 
 private:
+	struct PendingInput {
+		std::string streamId;
+		Protocol protocol;
+		std::string ip;
+	};
+
 	void onProcessStarted();
 	void onProcessErrorOccurred(QProcess::ProcessError error);
 	void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+	void addInputWhenReady(const std::string &streamId, Protocol protocol, const std::string &ip);
+	void flushPendingInputs();
 	void terminateProcess();
 	void cleanupProcess();
+	static QString pathName(const std::string &streamId, Protocol protocol);
+	void pollInputAvailability();
 
 	QProcess *m_process{nullptr};
 	QNetworkAccessManager *m_networkAccessManager{nullptr};
+	std::deque<PendingInput> m_pendingInputs;
+	std::map<std::string, std::pair<Protocol, bool>> m_inputs;
+	QTimer *m_inputStatusTimer{nullptr};
 	bool m_stopRequested{false};
+	bool m_apiReady{false};
 };
