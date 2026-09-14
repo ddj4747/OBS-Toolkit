@@ -12,6 +12,7 @@ class StreamHandler : public QObject {
 
 public:
 	explicit StreamHandler(QObject *parent = nullptr) : QObject(parent) {}
+
 	~StreamHandler() override = default;
 
 	StreamHandler(const StreamHandler &) = delete;

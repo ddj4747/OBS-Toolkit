@@ -52,6 +52,7 @@
       "description": "Build for Windows x64",
       "inherits": ["template"],
       "binaryDir": "${sourceDir}/build_x64",
+      "toolchainFile": "${sourceDir}/build/generators/conan_toolchain.cmake",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",

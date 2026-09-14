@@ -349,6 +349,7 @@ def run_conan_install(build_type: str):
         "install",
         ".",
         "-c", f'user.plugin:obs_location="{obs_dir}"',
+        "-c", "tools.cmake.cmaketoolchain:generator=Ninja",
         common_build_missing,
         f"-s compiler.cppstd={cppstd}",
         f"-s build_type={build_type}"

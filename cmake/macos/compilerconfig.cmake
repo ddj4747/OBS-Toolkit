@@ -13,6 +13,10 @@ include(ccache)
 include(compiler_common)
 
 add_compile_options("$<$<NOT:$<COMPILE_LANGUAGE:Swift>>:-fopenmp-simd>")
+add_compile_options(
+  "$<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>"
+  "$<$<COMPILE_LANGUAGE:OBJCXX>:-fexperimental-library>"
+)
 
 # Ensure recent enough Xcode and platform SDK
 function(check_sdk_requirements)

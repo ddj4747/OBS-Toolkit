@@ -101,8 +101,7 @@ bool MediamtxManager::ready() const {
 	return running() && m_apiReady;
 }
 
-void MediamtxManager::onProcessStarted() {
-}
+void MediamtxManager::onProcessStarted() {}
 
 void MediamtxManager::onProcessErrorOccurred(const QProcess::ProcessError error) {
 	if (error != QProcess::FailedToStart) {

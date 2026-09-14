@@ -36,7 +36,7 @@ find_package(
 if(OS_WINDOWS)
   get_property(_imported_targets DIRECTORY PROPERTY IMPORTED_TARGETS)
   foreach(_target IN LISTS _imported_targets)
-    if(_target MATCHES "^Qt6?::")
+    if(_target MATCHES "^Qt6::")
       set_target_properties(${_target} PROPERTIES MAP_IMPORTED_CONFIG_DEBUG Release)
     endif()
   endforeach()
