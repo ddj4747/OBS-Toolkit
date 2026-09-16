@@ -64,17 +64,27 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
 
   if(WIN32)
     set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}/bin/64bit")
-    set(OBS_PLUGIN_DEST ${USER_PLUGIN_OBS_LOCATION}/obs-plugins/64bit)
-    set(OBS_PLUGIN_DATA_DEST ${USER_PLUGIN_OBS_LOCATION}/data/obs-plugins/${CMAKE_PROJECT_NAME})
+    set(OBS_PLUGIN_DEST "${USER_PLUGIN_OBS_LOCATION}/obs-plugins/64bit")
+    set(OBS_PLUGIN_DATA_DEST "${USER_PLUGIN_OBS_LOCATION}/data/obs-plugins/${CMAKE_PROJECT_NAME}")
+    cmake_path(NATIVE_PATH OBS_PROGRAM_PATH NORMALIZE OBS_PROGRAM_PATH_NATIVE)
 
     add_custom_target(
       run
+      COMMAND
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "Get-Process -Name obs64 -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 1"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DEST}"
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGIN_RUNDIR_DATA}" "${OBS_PLUGIN_DATA_DEST}"
-      COMMAND ${CMAKE_COMMAND} -E chdir "${OBS_PROGRAM_PATH}" obs64.exe
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
+      COMMAND
+        powershell -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_SOURCE_DIR}/cmake/windows/run-obs.ps1" -ObsBinDir "${OBS_PROGRAM_PATH_NATIVE}"
+      COMMENT "Deploying plugin and launching OBS..."
       DEPENDS ${CMAKE_PROJECT_NAME}
+      USES_TERMINAL
+      VERBATIM
     )
   elseif(APPLE)
     set(OBS_PROGRAM_PATH "${USER_PLUGIN_OBS_LOCATION}/OBS.app/Contents/MacOS/OBS")
