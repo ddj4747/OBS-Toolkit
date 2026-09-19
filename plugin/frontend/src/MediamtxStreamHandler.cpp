@@ -55,7 +55,7 @@ MediamtxStreamHandler::MediamtxStreamHandler(QObject *parent) : StreamHandler(pa
 			 });
 }
 
-void MediamtxStreamHandler::start(const std::string &streamId, const Protocol protocol,
+void MediamtxStreamHandler::start(const std::string &streamId, const StreamProtocol protocol,
 				  const std::string &publicAddress, const uint16_t) {
 	m_streamId = streamId;
 	m_protocol = protocol;

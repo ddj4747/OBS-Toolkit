@@ -11,7 +11,7 @@ public:
 	explicit GoIRLStreamHandler(QObject *parent = nullptr);
 	~GoIRLStreamHandler() override;
 
-	void start(const std::string &streamId, Protocol protocol, const std::string &publicAddress,
+	void start(const std::string &streamId, StreamProtocol protocol, const std::string &publicAddress,
 		   uint16_t port) override;
 	void stop(const std::string &streamId) override;
 

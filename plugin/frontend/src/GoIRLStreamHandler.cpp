@@ -9,7 +9,7 @@ GoIRLStreamHandler::~GoIRLStreamHandler() {
 	delete m_process;
 }
 
-void GoIRLStreamHandler::start(const std::string &streamId, const Protocol, const std::string &publicAddress,
+void GoIRLStreamHandler::start(const std::string &streamId, const StreamProtocol, const std::string &publicAddress,
 			       const uint16_t port) {
 	m_streamId = streamId;
 	m_publicAddress = publicAddress;

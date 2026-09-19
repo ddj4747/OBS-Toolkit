@@ -9,7 +9,6 @@
 #include <QThread>
 
 static constexpr int c_stopTimeoutMs = 5000;
-static constexpr std::size_t c_minPassphraseLength = 10;
 
 GoIRL_Process::GoIRL_Process(const uint16_t port) : m_port(port) {}
 

@@ -8,7 +8,7 @@ class MediamtxStreamHandler final : public StreamHandler {
 public:
 	explicit MediamtxStreamHandler(QObject *parent = nullptr);
 
-	void start(const std::string &streamId, Protocol protocol, const std::string &publicAddress,
+	void start(const std::string &streamId, StreamProtocol protocol, const std::string &publicAddress,
 		   uint16_t port) override;
 	void stop(const std::string &streamId) override;
 
@@ -19,5 +19,5 @@ private:
 
 	MediamtxManager *m_manager{nullptr};
 	std::string m_streamId;
-	Protocol m_protocol{};
+	StreamProtocol m_protocol{};
 };

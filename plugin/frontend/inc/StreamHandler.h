@@ -18,7 +18,7 @@ public:
 	StreamHandler(const StreamHandler &) = delete;
 	StreamHandler &operator=(const StreamHandler &) = delete;
 
-	virtual void start(const std::string &streamId, Protocol protocol, const std::string &publicAddress,
+	virtual void start(const std::string &streamId, StreamProtocol protocol, const std::string &publicAddress,
 			   uint16_t port) = 0;
 	virtual void stop(const std::string &streamId) = 0;
 

@@ -65,6 +65,9 @@ add_link_options(
   $<$<NOT:$<CONFIG:Debug>>:/OPT:ICF>
   $<$<NOT:$<CONFIG:Debug>>:/LTCG>
   $<$<NOT:$<CONFIG:Debug>>:/INCREMENTAL:NO>
+  "$<$<NOT:$<CONFIG:Debug>>:/NODEFAULTLIB:LIBCMT>"
+  "$<$<NOT:$<CONFIG:Debug>>:/NODEFAULTLIB:LIBCMTD>"
+  "$<$<NOT:$<CONFIG:Debug>>:/NODEFAULTLIB:MSVCRTD>"
   /DEBUG
   /Brepro
 )

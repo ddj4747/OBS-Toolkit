@@ -9,6 +9,8 @@ import tempfile
 import urllib.request
 import zipfile
 import tarfile
+import re
+from pathlib import Path
 
 env_file_path = ".env"
 default_env_content = """
@@ -128,7 +130,7 @@ elif current_platform.startswith("linux"):
     extra_flags = "-c tools.system.package_manager:mode=install -c tools.system.package_manager:sudo=True"
 elif current_platform == "darwin":
     cppstd = "20"
-    extra_flags = ""
+    extra_flags = "-s os.version=13.3"
 else:
     cppstd = "20"
     extra_flags = ""
@@ -343,7 +345,7 @@ def install_go_irl():
         sys.exit(-1)
 
 
-def run_conan_install(build_type: str):
+def run_conan_install(build_type: str, arch: str | None = None, output_folder: str | None = None):
     cmd_parts = [
         "conan",
         "install",
@@ -355,8 +357,17 @@ def run_conan_install(build_type: str):
         f"-s build_type={build_type}"
     ]
 
+    if arch:
+        cmd_parts.append(f"-s arch={arch}")
+
+    if output_folder:
+        cmd_parts.extend(("-of", output_folder))
+        cmd_parts.extend(("-c", "tools.cmake.cmaketoolchain:user_presets="))
+
     if current_platform == "win32":
+        runtime_type = "Debug" if build_type == "Debug" else "Release"
         cmd_parts.append("-s compiler.runtime=dynamic")
+        cmd_parts.append(f"-s compiler.runtime_type={runtime_type}")
 
     if extra_flags:
         cmd_parts.append(extra_flags)
@@ -370,6 +381,48 @@ def run_conan_install(build_type: str):
         sys.exit(result.returncode)
 
 
+def conan_package_folder(generators_dir: Path, package_name: str) -> Path:
+    for data_file in generators_dir.glob(f"{package_name}-*-data.cmake"):
+        contents = data_file.read_text(encoding="utf-8")
+        match = re.search(rf'set\({package_name}_PACKAGE_FOLDER_RELEASE "([^"]+)"\)', contents)
+        if match:
+            return Path(match.group(1))
+
+    print(f"Could not locate the Conan package folder for {package_name} in {generators_dir}")
+    sys.exit(-1)
+
+
+def create_macos_universal_miniupnpc():
+    arm_generators = Path("build/Release/generators")
+    x86_generators = Path("build/Release-x86_64/build/Release/generators")
+    arm_package = conan_package_folder(arm_generators, "miniupnpc")
+    x86_package = conan_package_folder(x86_generators, "miniupnpc")
+
+    universal_dir = Path(".deps/conan-macos-universal")
+    universal_include_dir = universal_dir / "include"
+    universal_lib_dir = universal_dir / "lib"
+    universal_lib = universal_lib_dir / "libminiupnpc.a"
+
+    shutil.rmtree(universal_dir, ignore_errors=True)
+    universal_include_dir.mkdir(parents=True)
+    universal_lib_dir.mkdir(parents=True)
+    shutil.copytree(arm_package / "include", universal_include_dir, dirs_exist_ok=True)
+
+    result = subprocess.run(
+        [
+            "lipo",
+            "-create",
+            "-output",
+            str(universal_lib),
+            str(arm_package / "lib/libminiupnpc.a"),
+            str(x86_package / "lib/libminiupnpc.a"),
+        ]
+    )
+    if result.returncode != 0:
+        print(f"Failed to create universal miniupnpc archive (exit {result.returncode})")
+        sys.exit(result.returncode)
+
+
 shutil.rmtree("build", ignore_errors=True)
 
 print(f"Using OBS location: {obs_dir}")
@@ -378,6 +431,10 @@ install_required_packages()
 install_go_irl()
 install_mediamtx();
 run_conan_install("Release")
+
+if current_platform == "darwin":
+    run_conan_install("Release", arch="x86_64", output_folder="build/Release-x86_64")
+    create_macos_universal_miniupnpc()
 
 disable_debug = os.environ.get("DISABLE_DEBUG", "").lower()
 if disable_debug not in ("true", "1", "yes", "on"):

@@ -25,7 +25,6 @@ target_link_libraries(
     Qt6::Network
     OBS::libobs
     plugin_common
-    miniupnpc::miniupnpc
     FFmpeg::avcodec
     FFmpeg::avformat
     FFmpeg::avutil
@@ -33,6 +32,17 @@ target_link_libraries(
     FFmpeg::swresample
 )
 target_include_directories(plugin_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+
+if(APPLE)
+  set(_universal_miniupnpc_dir "${CMAKE_SOURCE_DIR}/.deps/conan-macos-universal")
+  if(NOT EXISTS "${_universal_miniupnpc_dir}/lib/libminiupnpc.a")
+    message(FATAL_ERROR "Universal miniupnpc archive is missing. Run configure.py before configuring the project.")
+  endif()
+  target_include_directories(plugin_backend PUBLIC "${_universal_miniupnpc_dir}/include")
+  target_link_libraries(plugin_backend PUBLIC "${_universal_miniupnpc_dir}/lib/libminiupnpc.a")
+else()
+  target_link_libraries(plugin_backend PUBLIC miniupnpc::miniupnpc)
+endif()
 
 set_target_properties(plugin_backend PROPERTIES AUTOMOC ON)
 

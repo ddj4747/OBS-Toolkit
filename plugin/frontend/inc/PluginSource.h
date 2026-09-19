@@ -75,7 +75,7 @@ private:
 	bool m_running{false};
 	std::string m_streamId;
 	std::string m_streamUrl;
-	Protocol m_protocol{};
+	StreamProtocol m_protocol{};
 
 	PortForwarder *m_portForwarder{nullptr};
 	PortForwarder *m_secondaryPortForwarder{nullptr};

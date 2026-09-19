@@ -18,7 +18,7 @@
     {
       "name": "macos",
       "displayName": "macOS Universal",
-      "description": "Build for macOS 13.0+ (Universal binary)",
+      "description": "Build for macOS 13.3+ (Universal binary)",
       "inherits": ["template"],
       "binaryDir": "${sourceDir}/build_macos",
       "condition": {
@@ -29,7 +29,7 @@
       "generator": "Xcode",
       "warnings": {"dev": true, "deprecated": true},
       "cacheVariables": {
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.3",
         "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
         "CODESIGN_IDENTITY": "$penv{CODESIGN_IDENT}",
         "CODESIGN_TEAM": "$penv{CODESIGN_TEAM}"
@@ -52,7 +52,6 @@
       "description": "Build for Windows x64",
       "inherits": ["template"],
       "binaryDir": "${sourceDir}/build_x64",
-      "toolchainFile": "${sourceDir}/build/generators/conan_toolchain.cmake",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",

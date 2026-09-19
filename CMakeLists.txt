@@ -14,13 +14,22 @@ include(compilerconfig)
 include(defaults)
 include(helpers)
 
-list(APPEND CMAKE_PREFIX_PATH $ENV{QT_DIR}/lib/cmake)
+list(APPEND CMAKE_PREFIX_PATH "$ENV{QT_DIR}/lib/cmake")
 
-set(_conan_generators_dir "${CMAKE_BINARY_DIR}/generators")
-if(EXISTS "${_conan_generators_dir}/cmakedeps_macros.cmake")
-  list(PREPEND CMAKE_PREFIX_PATH "${_conan_generators_dir}")
-  message(STATUS "Using Conan dependencies from ${_conan_generators_dir}")
-endif()
+set(
+  _conan_generator_dirs
+  "${CMAKE_BINARY_DIR}/generators"
+  "${CMAKE_SOURCE_DIR}/build/generators"
+  "${CMAKE_SOURCE_DIR}/build/Release/generators"
+  "${CMAKE_SOURCE_DIR}/build/Debug/generators"
+)
+foreach(_conan_generators_dir IN LISTS _conan_generator_dirs)
+  if(EXISTS "${_conan_generators_dir}/cmakedeps_macros.cmake")
+    list(PREPEND CMAKE_PREFIX_PATH "${_conan_generators_dir}")
+    message(STATUS "Using Conan dependencies from ${_conan_generators_dir}")
+  endif()
+endforeach()
+unset(_conan_generator_dirs)
 unset(_conan_generators_dir)
 
 find_package(libobs REQUIRED)
@@ -79,8 +88,8 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
       COMMAND
-        powershell -NoProfile -ExecutionPolicy Bypass -File
-        "${CMAKE_SOURCE_DIR}/cmake/windows/run-obs.ps1" -ObsBinDir "${OBS_PROGRAM_PATH_NATIVE}"
+        powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/cmake/windows/run-obs.ps1" -ObsBinDir
+        "${OBS_PROGRAM_PATH_NATIVE}"
       COMMENT "Deploying plugin and launching OBS..."
       DEPENDS ${CMAKE_PROJECT_NAME}
       USES_TERMINAL

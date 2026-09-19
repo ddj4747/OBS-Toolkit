@@ -149,7 +149,7 @@ void MediamtxManager::cleanupProcess() {
 	m_inputs.clear();
 }
 
-void MediamtxManager::addInput(const std::string &streamId, const Protocol protocol, const std::string &ip) {
+void MediamtxManager::addInput(const std::string &streamId, const StreamProtocol protocol, const std::string &ip) {
 	const QString qname = QString::fromStdString(streamId);
 	if (!running()) {
 		m_pendingInputs.push_back({streamId, protocol, ip});
@@ -173,12 +173,13 @@ void MediamtxManager::flushPendingInputs() {
 	}
 }
 
-QString MediamtxManager::pathName(const std::string &streamId, const Protocol protocol) {
+QString MediamtxManager::pathName(const std::string &streamId, const StreamProtocol protocol) {
 	const QString name = QString::fromStdString(streamId);
-	return protocol == Protocol::RTMP ? QStringLiteral("app/%1").arg(name) : name;
+	return protocol == StreamProtocol::RTMP ? QStringLiteral("app/%1").arg(name) : name;
 }
 
-void MediamtxManager::addInputWhenReady(const std::string &streamId, const Protocol protocol, const std::string &ip) {
+void MediamtxManager::addInputWhenReady(const std::string &streamId, const StreamProtocol protocol,
+					const std::string &ip) {
 	const QString qname = QString::fromStdString(streamId);
 	QJsonObject body;
 	body["source"] = "publisher";
@@ -189,16 +190,16 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Proto
 	const QString ipStr = QString::fromStdString(ip);
 
 	switch (protocol) {
-	case Protocol::RTSP:
+	case StreamProtocol::RTSP:
 		publishUrl = QString("rtsp://%1:8554/%2").arg(ipStr).arg(mediaPath);
 		break;
-	case Protocol::RTMP:
+	case StreamProtocol::RTMP:
 		publishUrl = QString("rtmp://%1:1935/%2").arg(ipStr).arg(mediaPath);
 		break;
-	case Protocol::SRT:
+	case StreamProtocol::SRT:
 		publishUrl = QString("srt://%1:8890?streamid=publish:%2").arg(ipStr).arg(encodedPathName);
 		break;
-	case Protocol::WebRTC:
+	case StreamProtocol::WebRTC:
 		publishUrl = QString("http://%1:8889/%2/whip").arg(ipStr).arg(mediaPath);
 		break;
 	default:
@@ -230,7 +231,7 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Proto
 	});
 }
 
-void MediamtxManager::removeInput(const std::string &name, const Protocol protocol) {
+void MediamtxManager::removeInput(const std::string &name, const StreamProtocol protocol) {
 	const QString qname = QString::fromStdString(name);
 	std::erase_if(m_pendingInputs, [&name](const PendingInput &input) { return input.streamId == name; });
 	m_inputs.erase(name);

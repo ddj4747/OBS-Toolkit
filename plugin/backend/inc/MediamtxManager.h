@@ -15,7 +15,7 @@
 #define NO_DISCARD [[nodiscard]]
 #endif
 
-enum class Protocol : uint8_t { MoQ, SRT, WebRTC, RTSP, RTMP, HLS, MPEGTS, RTP, SRTLA };
+enum class StreamProtocol : uint8_t { MoQ, SRT, WebRTC, RTSP, RTMP, HLS, MPEGTS, RTP, SRTLA };
 
 class MediamtxManager final : public QObject {
 	Q_OBJECT
@@ -34,8 +34,8 @@ public:
 	void stopServer();
 	NO_DISCARD bool running() const;
 	NO_DISCARD bool ready() const;
-	void addInput(const std::string &streamId, Protocol protocol, const std::string &ip);
-	void removeInput(const std::string &streamId, Protocol protocol);
+	void addInput(const std::string &streamId, StreamProtocol protocol, const std::string &ip);
+	void removeInput(const std::string &streamId, StreamProtocol protocol);
 
 signals:
 	void serverStarted();
@@ -50,24 +50,24 @@ signals:
 private:
 	struct PendingInput {
 		std::string streamId;
-		Protocol protocol;
+		StreamProtocol protocol;
 		std::string ip;
 	};
 
 	void onProcessStarted();
 	void onProcessErrorOccurred(QProcess::ProcessError error);
 	void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
-	void addInputWhenReady(const std::string &streamId, Protocol protocol, const std::string &ip);
+	void addInputWhenReady(const std::string &streamId, StreamProtocol protocol, const std::string &ip);
 	void flushPendingInputs();
 	void terminateProcess();
 	void cleanupProcess();
-	static QString pathName(const std::string &streamId, Protocol protocol);
+	static QString pathName(const std::string &streamId, StreamProtocol protocol);
 	void pollInputAvailability();
 
 	QProcess *m_process{nullptr};
 	QNetworkAccessManager *m_networkAccessManager{nullptr};
 	std::deque<PendingInput> m_pendingInputs;
-	std::map<std::string, std::pair<Protocol, bool>> m_inputs;
+	std::map<std::string, std::pair<StreamProtocol, bool>> m_inputs;
 	QTimer *m_inputStatusTimer{nullptr};
 	bool m_stopRequested{false};
 	bool m_apiReady{false};

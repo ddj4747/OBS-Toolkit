@@ -22,17 +22,17 @@ struct ForwardingConfig {
 	PortForwarder::Protocol protocol;
 };
 
-ForwardingConfig forwardingConfigFor(const Protocol protocol) {
+ForwardingConfig forwardingConfigFor(const StreamProtocol protocol) {
 	switch (protocol) {
-	case Protocol::SRTLA:
+	case StreamProtocol::SRTLA:
 		return {SRTLA_PORT, PortForwarder::Protocol::UDP};
-	case Protocol::SRT:
+	case StreamProtocol::SRT:
 		return {SRT_PORT, PortForwarder::Protocol::UDP};
-	case Protocol::RTMP:
+	case StreamProtocol::RTMP:
 		return {RTMP_PORT, PortForwarder::Protocol::TCP};
-	case Protocol::RTSP:
+	case StreamProtocol::RTSP:
 		return {RTSP_PORT, PortForwarder::Protocol::TCP};
-	case Protocol::WebRTC:
+	case StreamProtocol::WebRTC:
 		return {WEBRTC_HTTP_PORT, PortForwarder::Protocol::TCP};
 	default:
 		return {PortForwarder::getAvailablePort(), PortForwarder::Protocol::UDP};
@@ -137,7 +137,7 @@ uint32_t PluginSource::height() const {
 
 bool PluginSource::readSettings(obs_data_t *settings, PluginSource *source) {
 	const char *protocolString = obs_data_get_string(settings, "Protocol");
-	const std::optional protocolOpt = magic_enum::enum_cast<Protocol>(protocolString);
+	const std::optional protocolOpt = magic_enum::enum_cast<StreamProtocol>(protocolString);
 	if (!protocolOpt.has_value()) {
 		obs_log(LOG_ERROR, "Invalid protocol %s", protocolString);
 		return false;
@@ -184,7 +184,7 @@ void PluginSource::startReceiver() {
 	const auto [port, protocol] = forwardingConfigFor(m_protocol);
 	m_portForwarder = new PortForwarder(port, protocol);
 
-	if (m_protocol == Protocol::WebRTC) {
+	if (m_protocol == StreamProtocol::WebRTC) {
 		m_secondaryPortForwarder = new PortForwarder(WEBRTC_ICE_PORT, PortForwarder::Protocol::UDP);
 	}
 
@@ -236,8 +236,9 @@ void PluginSource::startStreamHandler() {
 	}
 
 	destroyStreamHandler();
-	m_streamHandler = m_protocol == Protocol::SRTLA ? static_cast<StreamHandler *>(new GoIRLStreamHandler())
-							: static_cast<StreamHandler *>(new MediamtxStreamHandler());
+	m_streamHandler = m_protocol == StreamProtocol::SRTLA
+				  ? static_cast<StreamHandler *>(new GoIRLStreamHandler())
+				  : static_cast<StreamHandler *>(new MediamtxStreamHandler());
 	QObject::connect(m_streamHandler, &StreamHandler::streamReady, m_streamHandler,
 			 [this](const QString &streamId, const QString &publishUrl) {
 				 onStreamReady(streamId, publishUrl);
@@ -298,12 +299,12 @@ void PluginSource::startFrameReceiver() {
 		return;
 	}
 
-	if (m_protocol == Protocol::SRTLA) {
+	if (m_protocol == StreamProtocol::SRTLA) {
 		m_frameReceiver =
 			new SRT_FrameReceiver(SRT_PORT, std::format("{}-client", m_streamId), m_selectedCodecs);
 	} else {
-		const std::string mediaPath = m_protocol == Protocol::RTMP ? std::format("app/{}", m_streamId)
-									   : m_streamId;
+		const std::string mediaPath = m_protocol == StreamProtocol::RTMP ? std::format("app/{}", m_streamId)
+										 : m_streamId;
 		m_frameReceiver = new SRT_FrameReceiver(SRT_PORT, std::format("read:{}", mediaPath), m_selectedCodecs);
 	}
 
@@ -460,7 +461,7 @@ void PluginSource::OnGetDefaults(obs_data_t *settings) {
 
 void PluginSource::OnUpdate(void *data, obs_data_t *settings) {
 	PluginSource *source = static_cast<PluginSource *>(data);
-	const Protocol previousProtocol = source->m_protocol;
+	const StreamProtocol previousProtocol = source->m_protocol;
 	const std::string previousStreamId = source->m_streamId;
 	const auto previousCodecs = source->m_selectedCodecs;
 
