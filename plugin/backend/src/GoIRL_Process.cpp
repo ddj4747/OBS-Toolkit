@@ -1,4 +1,5 @@
 #include <GoIRL_Process.h>
+#include <KillOnCloseJob.h>
 
 #include <obs-module.h>
 #include <plugin-support.h>
@@ -51,6 +52,7 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 
 	m_stopRequested = false;
 	m_process = new QProcess(this);
+	attachToKillOnCloseJob(m_process);
 	connect(m_process, &QProcess::started, this, &GoIRL_Process::onProcessStarted);
 	connect(m_process, &QProcess::errorOccurred, this, &GoIRL_Process::onProcessErrorOccurred);
 	connect(m_process, &QProcess::finished, this, &GoIRL_Process::onProcessFinished);

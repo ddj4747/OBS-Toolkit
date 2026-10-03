@@ -1,4 +1,5 @@
 #include <MediamtxManager.h>
+#include <KillOnCloseJob.h>
 
 #include <obs-module.h>
 #include <plugin-support.h>
@@ -62,6 +63,7 @@ void MediamtxManager::startServer() {
 	m_stopRequested = false;
 	m_apiReady = false;
 	m_process = new QProcess(this);
+	attachToKillOnCloseJob(m_process);
 	connect(m_process, &QProcess::started, this, &MediamtxManager::onProcessStarted);
 	connect(m_process, &QProcess::errorOccurred, this, &MediamtxManager::onProcessErrorOccurred);
 	connect(m_process, &QProcess::finished, this, &MediamtxManager::onProcessFinished);
