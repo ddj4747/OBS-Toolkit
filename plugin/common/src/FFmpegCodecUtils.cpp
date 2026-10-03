@@ -5,7 +5,6 @@
 #include <string_view>
 
 namespace {
-
 constexpr std::string_view c_preferredDecoders[] = {
 	// NVIDIA CUVID/NVDEC
 	"h264_cuvid",
@@ -91,6 +90,19 @@ std::size_t preferredDecoderRank(const DecoderInfo &decoder) {
 	return static_cast<std::size_t>(std::distance(std::begin(c_preferredDecoders), position));
 }
 
+bool canOpenDecoder(const AVCodec* codec) {
+	if (!codec) {
+		return false;
+	}
+
+	AVCodecContext *ctx = avcodec_alloc_context3(codec);
+	if (!ctx) return false;
+
+	const int ret = avcodec_open2(ctx, codec, nullptr);
+	avcodec_free_context(&ctx);
+	return ret == 0;
+}
+
 } // namespace
 
 std::vector<DecoderInfo> findDecoders(const AVCodecID codecId) {
@@ -103,6 +115,10 @@ std::vector<DecoderInfo> findDecoders(const AVCodecID codecId) {
 		if (!av_codec_is_decoder(codec) || codec->id != codecId)
 			continue;
 
+		if (!canOpenDecoder(codec)) {
+			continue;
+		}
+
 		DecoderInfo info{
 			.codec = codec,
 			.name = codec->name ? codec->name : "",
@@ -112,7 +128,7 @@ std::vector<DecoderInfo> findDecoders(const AVCodecID codecId) {
 		result.push_back(std::move(info));
 	}
 
-	std::stable_sort(result.begin(), result.end(), [](const DecoderInfo &left, const DecoderInfo &right) {
+	std::ranges::stable_sort(result, [](const DecoderInfo &left, const DecoderInfo &right) {
 		return preferredDecoderRank(left) < preferredDecoderRank(right);
 	});
 
