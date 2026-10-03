@@ -90,13 +90,14 @@ std::size_t preferredDecoderRank(const DecoderInfo &decoder) {
 	return static_cast<std::size_t>(std::distance(std::begin(c_preferredDecoders), position));
 }
 
-bool canOpenDecoder(const AVCodec* codec) {
+bool canOpenDecoder(const AVCodec *codec) {
 	if (!codec) {
 		return false;
 	}
 
 	AVCodecContext *ctx = avcodec_alloc_context3(codec);
-	if (!ctx) return false;
+	if (!ctx)
+		return false;
 
 	const int ret = avcodec_open2(ctx, codec, nullptr);
 	avcodec_free_context(&ctx);
