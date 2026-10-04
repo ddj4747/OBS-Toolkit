@@ -94,7 +94,7 @@ bool canOpenDecoder(const AVCodec *codec) {
 	if (!codec) {
 		return false;
 	}
-
+	
 	AVCodecContext *ctx = avcodec_alloc_context3(codec);
 	if (!ctx)
 		return false;

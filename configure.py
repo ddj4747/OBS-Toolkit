@@ -287,7 +287,7 @@ def install_mediamtx():
 
 
 def install_go_irl():
-    release_link = 'https://github.com/ddj4747/go-irl/releases/tag/v1.0.0'
+    release_link = 'https://github.com/ddj4747/go-irl/releases/tag/v1.1.1'
     install_directory = './.deps/'
     executable_name = 'go-irl' + ('.exe' if current_platform == "win32" else '')
 

@@ -16,26 +16,11 @@ include(helpers)
 
 list(APPEND CMAKE_PREFIX_PATH "$ENV{QT_DIR}/lib/cmake")
 
-set(
-  _conan_generator_dirs
-  "${CMAKE_BINARY_DIR}/generators"
-  "${CMAKE_SOURCE_DIR}/build/generators"
-  "${CMAKE_SOURCE_DIR}/build/Release/generators"
-  "${CMAKE_SOURCE_DIR}/build/Debug/generators"
-)
-foreach(_conan_generators_dir IN LISTS _conan_generator_dirs)
-  if(EXISTS "${_conan_generators_dir}/cmakedeps_macros.cmake")
-    list(PREPEND CMAKE_PREFIX_PATH "${_conan_generators_dir}")
-    message(STATUS "Using Conan dependencies from ${_conan_generators_dir}")
-  endif()
-endforeach()
-unset(_conan_generator_dirs)
-unset(_conan_generators_dir)
-
 find_package(libobs REQUIRED)
 find_package(obs-frontend-api REQUIRED)
 find_package(Qt6 COMPONENTS Widgets Core Network)
 find_package(magic_enum REQUIRED)
+find_package(miniupnpc REQUIRED)
 find_package(
   FFmpeg
   REQUIRED
@@ -86,7 +71,7 @@ if(DEFINED USER_PLUGIN_OBS_LOCATION)
       COMMAND ${CMAKE_COMMAND} -E remove -f "${OBS_PLUGIN_DEST}/$<TARGET_FILE_NAME:${CMAKE_PROJECT_NAME}>"
       COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${OBS_PLUGIN_DEST}/"
       COMMAND ${CMAKE_COMMAND} -E make_directory "${OBS_PLUGIN_DATA_DEST}"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/data" "${OBS_PLUGIN_DATA_DEST}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGIN_RUNDIR_DATA}" "${OBS_PLUGIN_DATA_DEST}"
       COMMAND
         powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/cmake/windows/run-obs.ps1" -ObsBinDir
         "${OBS_PROGRAM_PATH_NATIVE}"

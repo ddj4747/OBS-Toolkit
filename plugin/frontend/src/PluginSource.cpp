@@ -215,7 +215,7 @@ void PluginSource::startReceiver() {
 	}
 }
 
-void PluginSource::onPortForwardFinished(PortForwarder *portForwarder, const bool success) {
+void PluginSource::onPortForwardFinished(const PortForwarder *portForwarder, const bool success) {
 	if (!m_running || (portForwarder != m_portForwarder && portForwarder != m_secondaryPortForwarder)) {
 		return;
 	}

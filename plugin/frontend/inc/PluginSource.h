@@ -57,7 +57,7 @@ private:
 	void stopFrameReceiver();
 	void destroyPortForwarder();
 	void destroyStreamHandler();
-	void onPortForwardFinished(PortForwarder *portForwarder, bool success);
+	void onPortForwardFinished(const PortForwarder *portForwarder, bool success);
 	void startStreamHandler();
 	void prepareInstanceForShutdown();
 

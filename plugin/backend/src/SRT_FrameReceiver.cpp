@@ -37,6 +37,15 @@ void logFfmpegError(const int level, const char *action, const int errorCode) {
 	obs_log(level, "SRT_FrameReceiver: %s: %s", action, errorBuffer);
 }
 
+void ffmpegLog(void *ptr, int level, const char *fmt, va_list vl) {
+	if (level > AV_LOG_VERBOSE)
+		return;
+	char line[1024];
+	int prefix = 1;
+	av_log_format_line(ptr, level, fmt, vl, line, sizeof(line), &prefix);
+	obs_log(LOG_INFO, "ffmpeg: %s", line);
+}
+
 video_format ffmpegToObsFormat(const AVPixelFormat format) {
 	switch (format) {
 	case AV_PIX_FMT_YUV420P:
@@ -645,10 +654,19 @@ bool SRT_FrameReceiver::openStream() {
 	avFormatContext->interrupt_callback.callback = ffmpegInterruptCallback;
 	avFormatContext->interrupt_callback.opaque = &m_interruptStop;
 
+	av_log_set_callback(ffmpegLog);
+#ifdef DEBUG
+	av_log_set_level(AV_LOG_VERBOSE);
+#endif
+
 	AVDictionary *options = nullptr;
 	av_dict_set(&options, "mode", "caller", 0);
+	av_dict_set(&options, "connect_timeout", "5000", 0);
+	av_dict_set(&options, "analyzeduration", "2000000", 0);
+	av_dict_set(&options, "probesize", "1000000", 0);
 	av_dict_set(&options, "listen_timeout", "5000000", 0);
-	av_dict_set(&options, "rw_timeout", "5000000", 0);
+	av_dict_set(&options, "rw_timeout", "20000000", 0);
+	av_dict_set(&options, "transtype", "live", 0);
 
 	const std::string url = std::format("srt://127.0.0.1:{}?streamid={}", m_port, m_streamID);
 	const int ret = avformat_open_input(&avFormatContext, url.c_str(), nullptr, &options);

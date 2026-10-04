@@ -67,10 +67,11 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 			obs_log(LOG_WARNING, "go-irl: %s", output.constData());
 	});
 
-	m_process->start(pathStr,
-			 {QStringLiteral("-mode=server"), QStringLiteral("-srtla-port=") + QString::number(m_port),
-			  QStringLiteral("-srt-port=") + QString::number(8890),
-			  QStringLiteral("-streamId=") + QString::fromStdString(streamKey)});
+	const QString streamIdArgument = QString::fromUtf8(streamKey.data(), static_cast<qsizetype>(streamKey.size()));
+	m_process->start(pathStr, {QStringLiteral("-mode=server"), QStringLiteral("-cli"), QStringLiteral("-insecure"),
+				   QStringLiteral("-verbose"), QStringLiteral("-srtla-port=") + QString::number(m_port),
+				   QStringLiteral("-srt-port=") + QString::number(8890),
+				   QStringLiteral("-streamId=") + streamIdArgument});
 }
 
 void GoIRL_Process::stopServer() {

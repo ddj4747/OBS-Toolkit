@@ -1,5 +1,4 @@
 add_library(plugin_backend STATIC)
-find_package(miniupnpc REQUIRED)
 
 file(
   GLOB_RECURSE PLUGIN_BACKEND_SOURCES
