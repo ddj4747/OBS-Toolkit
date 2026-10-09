@@ -8,6 +8,8 @@
 #include <QFrame>
 #include <QMainWindow>
 #include <QItemSelectionModel>
+#include <QPainter>
+#include <QStyledItemDelegate>
 #include <QStyle>
 #include <util/config-file.h>
 
@@ -18,6 +20,62 @@ const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
 const QString SETTINGS_ICON_PATH = QStringLiteral("settings/general.svg");
 const QString ARROW_UP_ICON_PATH = QStringLiteral("up.svg");
 const QString ARROW_DOWN_ICON_PATH = QStringLiteral("down.svg");
+const QString STREAM_ACTIVE_ICON_PATH = QStringLiteral("recording-active.svg");
+const QString STREAM_INACTIVE_ICON_PATH = QStringLiteral("recording-inactive.svg");
+constexpr int TYPE_ICON_ROLE = Qt::UserRole;
+constexpr int STATUS_ICON_ROLE = Qt::UserRole + 1;
+
+class SourceRowDelegate final : public QStyledItemDelegate {
+public:
+	using QStyledItemDelegate::QStyledItemDelegate;
+
+	void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+		QStyleOptionViewItem opt = option;
+		initStyleOption(&opt, index);
+		opt.text.clear();
+		opt.icon = {};
+		opt.features &= ~(QStyleOptionViewItem::HasDisplay | QStyleOptionViewItem::HasDecoration);
+
+		if (!opt.widget) {
+			return;
+		}
+
+		QStyle *style = opt.widget->style();
+		style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
+
+		constexpr int margin = 6;
+		constexpr int iconSize = 16;
+		constexpr int spacing = 8;
+
+		const QRect content = opt.rect.adjusted(margin, 0, -margin, 0);
+		const QRect typeRect(content.left(), content.center().y() - iconSize / 2, iconSize, iconSize);
+		const QRect statusRect(content.right() - iconSize + 1, content.center().y() - iconSize / 2, iconSize,
+				       iconSize);
+		const QRect textRect(typeRect.right() + spacing, content.top(),
+				     std::max(0, statusRect.left() - spacing - (typeRect.right() + spacing)),
+				     content.height());
+
+		const QIcon::Mode mode = opt.state.testFlag(QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled;
+		index.data(TYPE_ICON_ROLE).value<QIcon>().paint(painter, typeRect, Qt::AlignCenter, mode);
+		index.data(STATUS_ICON_ROLE).value<QIcon>().paint(painter, statusRect, Qt::AlignCenter, mode);
+
+		const QString elided =
+			opt.fontMetrics.elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, textRect.width());
+		style->drawItemText(painter, textRect, Qt::AlignVCenter | Qt::AlignLeft, opt.palette,
+				    opt.state.testFlag(QStyle::State_Enabled), elided,
+				    opt.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text);
+	}
+
+	QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+		constexpr int margin = 6;
+		constexpr int iconSize = 16;
+		constexpr int spacing = 8;
+		const int textWidth = option.fontMetrics.horizontalAdvance(index.data(Qt::DisplayRole).toString());
+		const int width = margin + iconSize + spacing + textWidth + spacing + iconSize + margin;
+		const int height = std::max(option.fontMetrics.height() + 12, 28);
+		return {width, height};
+	}
+};
 
 void restoreSavedDockLayout() {
 	config_t *userConfig = obs_frontend_get_user_config();
@@ -67,6 +125,10 @@ PluginDock::PluginDock(QWidget *parent)
 	m_sourcesListWidget->setIconSize(QSize(18, 18));
 	m_sourcesListWidget->setFrameShape(QFrame::NoFrame);
 	m_sourcesListWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+	m_sourcesListWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_sourcesListWidget->setResizeMode(QListView::Adjust);
+	m_sourcesListWidget->setTextElideMode(Qt::ElideRight);
+	m_sourcesListWidget->setItemDelegate(new SourceRowDelegate(m_sourcesListWidget));
 
 	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 	m_layout->setContentsMargins(1, 0, 1, 1);
@@ -106,12 +168,13 @@ PluginDock::PluginDock(QWidget *parent)
 		&PluginDock::onSourcesListSelectionChanged);
 
 	connect(m_sourcesListWidget, &QListWidget::itemDoubleClicked, this, [](QListWidgetItem *item) {
-		obs_source_t *source = obs_get_source_by_name(item->text().toUtf8());
+		obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
 		if (!source)
 			return;
 		obs_frontend_open_source_properties(source);
 		obs_source_release(source);
 	});
+
 
 	loadSourcesList();
 
@@ -207,8 +270,20 @@ void PluginDock::updateSourcesList() {
 			continue;
 		}
 
-		const QIcon icon = obs_helpers::getIconFromSource(sourcePtr);
-		new QListWidgetItem(icon, source, m_sourcesListWidget);
+		const PluginSource *pluginSource = PluginSource::fromSource(sourcePtr);
+		const bool active = pluginSource && pluginSource->active();
+		const QIcon statusIcon = obs_helpers::getIconFromPath(active ? STREAM_ACTIVE_ICON_PATH
+									     : STREAM_INACTIVE_ICON_PATH);
+		const QIcon typeIcon = obs_helpers::getIconFromSource(sourcePtr);
+		const QString name = QString::fromUtf8(obs_source_get_name(sourcePtr));
+		if (m_sourcesList.at(i) != name) {
+			m_sourcesList[i] = name;
+		}
+
+		auto *item = new QListWidgetItem(name, m_sourcesListWidget);
+		item->setToolTip(name);
+		item->setData(TYPE_ICON_ROLE, typeIcon);
+		item->setData(STATUS_ICON_ROLE, statusIcon);
 
 		obs_source_release(sourcePtr);
 	}

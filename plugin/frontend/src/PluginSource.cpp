@@ -127,6 +127,26 @@ obs_source_t *PluginSource::getSource() const {
 	return m_source;
 }
 
+uint64_t PluginSource::getBitrate() const {
+	if (!m_frameReceiver) {
+		return 0;
+	}
+
+	if (!m_frameReceiver->active()) {
+		return 0;
+	}
+
+	return m_frameReceiver->getBitrate();
+}
+
+bool PluginSource::active() const {
+	if (!m_frameReceiver) {
+		return false;
+	}
+
+	return m_frameReceiver->active();
+}
+
 uint32_t PluginSource::width() const {
 	return m_width;
 }

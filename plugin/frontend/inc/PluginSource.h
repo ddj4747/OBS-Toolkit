@@ -27,6 +27,8 @@ public:
 	static void prepareForShutdown();
 
 	NO_DISCARD obs_source_t *getSource() const;
+	NO_DISCARD uint64_t getBitrate() const;
+	NO_DISCARD bool active() const;
 
 	PluginSource(const PluginSource &) = delete;
 	PluginSource &operator=(const PluginSource &) = delete;
