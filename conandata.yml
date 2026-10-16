@@ -4,3 +4,5 @@ requirements:
     - "fmt/12.1.0"
     - "miniupnpc/2.2.5"
     - "magic_enum/0.9.8"
+    - "cpp-httplib/0.61.0"
+    - "openssl/4.0.3"

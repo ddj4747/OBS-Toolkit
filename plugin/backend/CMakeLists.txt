@@ -29,6 +29,8 @@ target_link_libraries(
     FFmpeg::avutil
     FFmpeg::swscale
     FFmpeg::swresample
+    httplib::httplib
+    openssl::openssl
 )
 target_include_directories(plugin_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 
