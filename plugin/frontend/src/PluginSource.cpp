@@ -12,6 +12,7 @@
 #include <QThread>
 #include <magic_enum/magic_enum.hpp>
 #include <format>
+#include <QUuid>
 
 namespace {
 constexpr uint16_t SRT_PORT = 8890;
@@ -198,6 +199,13 @@ bool PluginSource::readSettings(obs_data_t *settings, PluginSource *source) {
 	source->m_selectedCodecs = std::move(selectedCodecs);
 
 	return true;
+}
+
+std::string PluginSource::generateStreamId() {
+	const QUuid uuid = QUuid::createUuid();
+	const std::string uuidStr = obs_helpers::toStdString(uuid.toString());
+
+	return uuidStr.substr(1, uuidStr.size() - 2);
 }
 
 void PluginSource::startReceiver() {
@@ -479,7 +487,7 @@ obs_properties_t *PluginSource::OnGetProperties(void *data) {
 
 void PluginSource::OnGetDefaults(obs_data_t *settings) {
 	obs_data_set_default_string(settings, "Protocol", "SRTLA");
-	obs_data_set_default_string(settings, "StreamId", "test");
+	obs_data_set_default_string(settings, "StreamId", generateStreamId().c_str());
 	obs_data_set_default_string(settings, "StreamUrl", "");
 }
 

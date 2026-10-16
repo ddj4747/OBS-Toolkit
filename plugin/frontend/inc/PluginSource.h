@@ -52,6 +52,7 @@ private:
 	NO_DISCARD uint32_t height() const;
 
 	static bool readSettings(obs_data_t *settings, PluginSource *source);
+	static std::string generateStreamId();
 
 	void startReceiver();
 	void stopReceiver();
