@@ -8,7 +8,9 @@
 #include <obs-helpers.h>
 
 #include <QByteArray>
+#include <QClipboard>
 #include <QCoreApplication>
+#include <QGuiApplication>
 #include <QThread>
 #include <magic_enum/magic_enum.hpp>
 #include <format>
@@ -55,6 +57,22 @@ void deleteOnOwningThread(QObject *object) {
 	}
 
 	QMetaObject::invokeMethod(object, [object]() { delete object; }, Qt::BlockingQueuedConnection);
+}
+
+void copySettingToClipboard(const PluginSource *source, const char *key) {
+	obs_data_t *settings = obs_source_get_settings(source->getSource());
+	QGuiApplication::clipboard()->setText(QString::fromUtf8(obs_data_get_string(settings, key)));
+	obs_data_release(settings);
+}
+
+bool onCopyStreamIdClicked(obs_properties_t *, obs_property_t *, void *data) {
+	copySettingToClipboard(static_cast<PluginSource *>(data), "StreamId");
+	return false;
+}
+
+bool onCopyStreamUrlClicked(obs_properties_t *, obs_property_t *, void *data) {
+	copySettingToClipboard(static_cast<PluginSource *>(data), "StreamUrl");
+	return false;
 }
 } // namespace
 
@@ -435,8 +453,11 @@ obs_properties_t *PluginSource::OnGetProperties(void *data) {
 	obs_property_t *streamId = obs_properties_add_text(props, "StreamId", "Stream ID", OBS_TEXT_DEFAULT);
 	obs_property_set_enabled(streamId, false);
 
+	obs_properties_add_button2(props, "CopyStreamId", "Copy", onCopyStreamIdClicked, source);
+
 	obs_property_t *streamUrl = obs_properties_add_text(props, "StreamUrl", "Stream URL", OBS_TEXT_DEFAULT);
 	obs_property_set_enabled(streamUrl, false);
+	obs_properties_add_button2(props, "CopyStreamUrl", "Copy", onCopyStreamUrlClicked, source);
 
 	obs_property_list_add_string(protocolList, "SRTLA", "SRTLA");
 	obs_property_list_add_string(protocolList, "SRT", "SRT");
