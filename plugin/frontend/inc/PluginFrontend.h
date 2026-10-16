@@ -43,6 +43,8 @@ public:
 
 	void saveSettingsObject() const;
 
+	void updateSourcesList() const;
+
 	NO_DISCARD const QList<QString> &getAddedSources() const;
 
 private:

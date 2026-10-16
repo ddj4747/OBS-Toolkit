@@ -20,10 +20,23 @@ const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
 const QString SETTINGS_ICON_PATH = QStringLiteral("settings/general.svg");
 const QString ARROW_UP_ICON_PATH = QStringLiteral("up.svg");
 const QString ARROW_DOWN_ICON_PATH = QStringLiteral("down.svg");
-const QString STREAM_ACTIVE_ICON_PATH = QStringLiteral("recording-active.svg");
-const QString STREAM_INACTIVE_ICON_PATH = QStringLiteral("recording-inactive.svg");
+QIcon streamStatusIcon(const bool active) {
+	if (active) {
+		return QIcon(QStringLiteral(":/res/images/streaming-active.svg"));
+	}
+	return QIcon(obs_frontend_is_theme_dark() ? QStringLiteral("theme:Dark/streaming-inactive.svg")
+						  : QStringLiteral(":/res/images/streaming-inactive.svg"));
+}
 constexpr int TYPE_ICON_ROLE = Qt::UserRole;
 constexpr int STATUS_ICON_ROLE = Qt::UserRole + 1;
+constexpr int STATUS_ACTIVE_ROLE = Qt::UserRole + 2;
+constexpr int STATUS_REFRESH_INTERVAL_MS = 500;
+
+constexpr int ROW_MARGIN = 6;
+constexpr int ROW_ICON_SIZE = 16;
+constexpr int ROW_SPACING = 8;
+constexpr int STATUS_SECTION_PADDING = 8;
+constexpr int STATUS_SECTION_WIDTH = ROW_ICON_SIZE + 2 * STATUS_SECTION_PADDING;
 
 class SourceRowDelegate final : public QStyledItemDelegate {
 public:
@@ -43,35 +56,35 @@ public:
 		QStyle *style = opt.widget->style();
 		style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
 
-		constexpr int margin = 6;
-		constexpr int iconSize = 16;
-		constexpr int spacing = 8;
-
-		const QRect content = opt.rect.adjusted(margin, 0, -margin, 0);
-		const QRect typeRect(content.left(), content.center().y() - iconSize / 2, iconSize, iconSize);
-		const QRect statusRect(content.right() - iconSize + 1, content.center().y() - iconSize / 2, iconSize,
-				       iconSize);
-		const QRect textRect(typeRect.right() + spacing, content.top(),
-				     std::max(0, statusRect.left() - spacing - (typeRect.right() + spacing)),
-				     content.height());
+		const QRect statusSection(opt.rect.right() - STATUS_SECTION_WIDTH + 1, opt.rect.top(),
+					  STATUS_SECTION_WIDTH, opt.rect.height());
+		const QRect content(opt.rect.left() + ROW_MARGIN, opt.rect.top(),
+				    std::max(0, statusSection.left() - ROW_SPACING - (opt.rect.left() + ROW_MARGIN)),
+				    opt.rect.height());
+		const QRect typeRect(content.left(), content.center().y() - ROW_ICON_SIZE / 2, ROW_ICON_SIZE,
+				     ROW_ICON_SIZE);
+		const QRect statusRect(statusSection.center().x() - ROW_ICON_SIZE / 2 + 1,
+				       statusSection.center().y() - ROW_ICON_SIZE / 2, ROW_ICON_SIZE, ROW_ICON_SIZE);
+		const QRect textRect(typeRect.right() + ROW_SPACING, content.top(),
+				     std::max(0, content.right() - (typeRect.right() + ROW_SPACING)), content.height());
 
 		const QIcon::Mode mode = opt.state.testFlag(QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled;
 		index.data(TYPE_ICON_ROLE).value<QIcon>().paint(painter, typeRect, Qt::AlignCenter, mode);
+
 		index.data(STATUS_ICON_ROLE).value<QIcon>().paint(painter, statusRect, Qt::AlignCenter, mode);
 
-		const QString elided =
-			opt.fontMetrics.elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, textRect.width());
+		const QString elided = opt.fontMetrics.elidedText(index.data(Qt::DisplayRole).toString(),
+								  Qt::ElideRight, textRect.width());
 		style->drawItemText(painter, textRect, Qt::AlignVCenter | Qt::AlignLeft, opt.palette,
 				    opt.state.testFlag(QStyle::State_Enabled), elided,
-				    opt.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text);
+				    opt.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText
+									       : QPalette::Text);
 	}
 
-	QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
-		constexpr int margin = 6;
-		constexpr int iconSize = 16;
-		constexpr int spacing = 8;
+	NO_DISCARD QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
 		const int textWidth = option.fontMetrics.horizontalAdvance(index.data(Qt::DisplayRole).toString());
-		const int width = margin + iconSize + spacing + textWidth + spacing + iconSize + margin;
+		const int width =
+			ROW_MARGIN + ROW_ICON_SIZE + ROW_SPACING + textWidth + ROW_SPACING + STATUS_SECTION_WIDTH;
 		const int height = std::max(option.fontMetrics.height() + 12, 28);
 		return {width, height};
 	}
@@ -102,7 +115,8 @@ PluginDock::PluginDock(QWidget *parent)
 	: QWidget(parent),
 	  m_layout(new QVBoxLayout(this)),
 	  m_sourcesListWidget(new QListWidget(this)),
-	  m_toolbar(new QToolBar(this)) {
+	  m_toolbar(new QToolBar(this)),
+	  m_statusRefreshTimer(new QTimer(this)) {
 
 	m_toolbar->addSeparator();
 
@@ -175,7 +189,6 @@ PluginDock::PluginDock(QWidget *parent)
 		obs_source_release(source);
 	});
 
-
 	loadSourcesList();
 
 	EventManager::get()->addFrontendEventListener(this);
@@ -186,6 +199,9 @@ PluginDock::PluginDock(QWidget *parent)
 		syncTrackedSourceNames(cd);
 		updateSourcesList();
 	});
+
+	connect(m_statusRefreshTimer, &QTimer::timeout, this, [this] { updateStatusIcons(); });
+	m_statusRefreshTimer->start(STATUS_REFRESH_INTERVAL_MS);
 }
 
 PluginDock::~PluginDock() {
@@ -196,6 +212,7 @@ void PluginDock::detach() {
 	if (m_detached)
 		return;
 	m_detached = true;
+	m_statusRefreshTimer->stop();
 	obs_helpers::disconnectSourceEditSignals(m_sourceModificationSignalKey);
 	m_sourceModificationSignalKey = 0;
 	EventManager::get()->removeFrontendEventListener(this);
@@ -272,8 +289,7 @@ void PluginDock::updateSourcesList() {
 
 		const PluginSource *pluginSource = PluginSource::fromSource(sourcePtr);
 		const bool active = pluginSource && pluginSource->active();
-		const QIcon statusIcon = obs_helpers::getIconFromPath(active ? STREAM_ACTIVE_ICON_PATH
-									     : STREAM_INACTIVE_ICON_PATH);
+		const QIcon statusIcon = streamStatusIcon(active);
 		const QIcon typeIcon = obs_helpers::getIconFromSource(sourcePtr);
 		const QString name = QString::fromUtf8(obs_source_get_name(sourcePtr));
 		if (m_sourcesList.at(i) != name) {
@@ -284,6 +300,7 @@ void PluginDock::updateSourcesList() {
 		item->setToolTip(name);
 		item->setData(TYPE_ICON_ROLE, typeIcon);
 		item->setData(STATUS_ICON_ROLE, statusIcon);
+		item->setData(STATUS_ACTIVE_ROLE, active);
 
 		obs_source_release(sourcePtr);
 	}
@@ -303,6 +320,32 @@ void PluginDock::updateMinimumDockWidth() {
 	contentWidth += margins.left() + margins.right() + 2;
 
 	setMinimumWidth(contentWidth);
+}
+
+void PluginDock::updateStatusIcons() const {
+	if (m_detached) {
+		return;
+	}
+
+	for (int row = 0; row < m_sourcesListWidget->count(); row++) {
+		QListWidgetItem *item = m_sourcesListWidget->item(row);
+		obs_source_t *sourcePtr = obs_get_source_by_name(item->text().toUtf8().constData());
+		if (!sourcePtr) {
+			continue;
+		}
+
+		const PluginSource *pluginSource = PluginSource::fromSource(sourcePtr);
+		const bool active = pluginSource && pluginSource->active();
+		obs_source_release(sourcePtr);
+
+		const QVariant previous = item->data(STATUS_ACTIVE_ROLE);
+		if (previous.isValid() && previous.toBool() == active) {
+			continue;
+		}
+
+		item->setData(STATUS_ACTIVE_ROLE, active);
+		item->setData(STATUS_ICON_ROLE, streamStatusIcon(active));
+	}
 }
 
 void PluginDock::updateActionIcons() const {

@@ -1,5 +1,6 @@
 #include <MediamtxManager.h>
 #include <KillOnCloseJob.h>
+#include <obs-helpers.h>
 
 #include <obs-module.h>
 #include <plugin-support.h>
@@ -152,7 +153,7 @@ void MediamtxManager::cleanupProcess() {
 }
 
 void MediamtxManager::addInput(const std::string &streamId, const StreamProtocol protocol, const std::string &ip) {
-	const QString qname = QString::fromStdString(streamId);
+	const QString qname = obs_helpers::fromStdString(streamId);
 	if (!running()) {
 		m_pendingInputs.push_back({streamId, protocol, ip});
 		startServer();
@@ -176,20 +177,20 @@ void MediamtxManager::flushPendingInputs() {
 }
 
 QString MediamtxManager::pathName(const std::string &streamId, const StreamProtocol protocol) {
-	const QString name = QString::fromStdString(streamId);
+	const QString name = obs_helpers::fromStdString(streamId);
 	return protocol == StreamProtocol::RTMP ? QStringLiteral("app/%1").arg(name) : name;
 }
 
 void MediamtxManager::addInputWhenReady(const std::string &streamId, const StreamProtocol protocol,
 					const std::string &ip) {
-	const QString qname = QString::fromStdString(streamId);
+	const QString qname = obs_helpers::fromStdString(streamId);
 	QJsonObject body;
 	body["source"] = "publisher";
 
 	QString publishUrl;
 	const QString mediaPath = pathName(streamId, protocol);
 	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(mediaPath));
-	const QString ipStr = QString::fromStdString(ip);
+	const QString ipStr = obs_helpers::fromStdString(ip);
 
 	switch (protocol) {
 	case StreamProtocol::RTSP:
@@ -234,7 +235,7 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Strea
 }
 
 void MediamtxManager::removeInput(const std::string &name, const StreamProtocol protocol) {
-	const QString qname = QString::fromStdString(name);
+	const QString qname = obs_helpers::fromStdString(name);
 	std::erase_if(m_pendingInputs, [&name](const PendingInput &input) { return input.streamId == name; });
 	m_inputs.erase(name);
 
@@ -288,8 +289,8 @@ void MediamtxManager::pollInputAvailability() {
 			const bool available = reply->error() == QNetworkReply::NoError && status["available"].toBool();
 			if (available != input->second.second) {
 				input->second.second = available;
-				emit available ? inputAvailable(QString::fromStdString(streamId))
-					       : inputUnavailable(QString::fromStdString(streamId));
+				emit available ? inputAvailable(obs_helpers::fromStdString(streamId))
+					       : inputUnavailable(obs_helpers::fromStdString(streamId));
 			}
 			reply->deleteLater();
 		});

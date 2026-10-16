@@ -4,6 +4,7 @@
 #include <QToolBar>
 #include <QAction>
 #include <QListWidgetItem>
+#include <QTimer>
 #include <obs-frontend-api.h>
 
 #ifndef NO_DISCARD
@@ -28,6 +29,8 @@ public:
 
 	void prepareForShutdown();
 
+	void updateSourcesList();
+
 protected:
 	bool event(QEvent *event) override;
 
@@ -41,8 +44,8 @@ private:
 	static void onFrontendEvent(obs_frontend_event event, void *data);
 
 	void syncTrackedSourceNames(const calldata_t *cd);
-	void updateSourcesList();
 	void updateMinimumDockWidth();
+	void updateStatusIcons() const;
 	void updateActionIcons() const;
 	void saveSourcesList();
 	void loadSourcesList();
@@ -55,6 +58,7 @@ private:
 	QVBoxLayout *m_layout;
 	QListWidget *m_sourcesListWidget;
 	QToolBar *m_toolbar;
+	QTimer *m_statusRefreshTimer;
 
 	QAction *m_settingsAction{nullptr};
 	QAction *m_sourceSettingsAction{nullptr};

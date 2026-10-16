@@ -1,7 +1,11 @@
 #include <PluginSource.h>
 
+#include "PluginDock.h"
+#include "PluginFrontend.h"
+
 #include <GoIRLStreamHandler.h>
 #include <MediamtxStreamHandler.h>
+#include <obs-helpers.h>
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -275,22 +279,22 @@ void PluginSource::startStreamHandler() {
 }
 
 void PluginSource::onStreamReady(const QString &streamId, const QString &publishUrl) {
-	if (!m_running || streamId != QString::fromStdString(m_streamId)) {
+	if (!m_running || streamId != obs_helpers::fromStdString(m_streamId)) {
 		return;
 	}
 
-	m_streamUrl = publishUrl.toStdString();
+	m_streamUrl = obs_helpers::toStdString(publishUrl);
 	updateProperties();
 }
 
 void PluginSource::onStreamAvailable(const QString &streamId) {
-	if (m_running && streamId == QString::fromStdString(m_streamId)) {
+	if (m_running && streamId == obs_helpers::fromStdString(m_streamId)) {
 		startFrameReceiver();
 	}
 }
 
 void PluginSource::onStreamUnavailable(const QString &streamId) {
-	if (streamId == QString::fromStdString(m_streamId)) {
+	if (streamId == obs_helpers::fromStdString(m_streamId)) {
 		stopFrameReceiver();
 	}
 }

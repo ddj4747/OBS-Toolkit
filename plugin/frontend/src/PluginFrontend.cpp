@@ -141,6 +141,10 @@ void PluginFrontend::saveSettingsObject() const {
 	bfree(settingsPath);
 }
 
+void PluginFrontend::updateSourcesList() const {
+	m_pluginDock->updateSourcesList();
+}
+
 const QList<QString> &PluginFrontend::getAddedSources() const {
 	return m_pluginDock->getSourcesList();
 }

@@ -1,5 +1,6 @@
 #include <GoIRLStreamHandler.h>
 
+#include <obs-helpers.h>
 #include <obs-module.h>
 #include <plugin-support.h>
 
@@ -17,22 +18,22 @@ void GoIRLStreamHandler::start(const std::string &streamId, const StreamProtocol
 	if (!m_process) {
 		m_process = new GoIRL_Process(port);
 		QObject::connect(m_process, &GoIRL_Process::serverStarted, this, [this]() {
-			const QString streamId = QString::fromStdString(m_streamId);
-			const QString publishUrl = QString::fromStdString(m_process->getStreamUrl(m_publicAddress));
+			const QString streamId = obs_helpers::fromStdString(m_streamId);
+			const QString publishUrl = obs_helpers::fromStdString(m_process->getStreamUrl(m_publicAddress));
 			obs_log(LOG_INFO, "go-irl SRTLA server started");
 			emit streamReady(streamId, publishUrl);
 			emit streamAvailable(streamId);
 		});
 		QObject::connect(m_process, &GoIRL_Process::serverStopped, this, [this]() {
 			obs_log(LOG_INFO, "go-irl SRTLA server stopped");
-			emit streamStopped(QString::fromStdString(m_streamId));
+			emit streamStopped(obs_helpers::fromStdString(m_streamId));
 		});
 		QObject::connect(m_process, &GoIRL_Process::serverError, this,
 				 [this](const GoIRL_Process::ServerError error) {
 					 const QString message =
 						 QStringLiteral("go-irl server error: %1").arg(static_cast<int>(error));
 					 obs_log(LOG_ERROR, "%s", qUtf8Printable(message));
-					 emit streamError(QString::fromStdString(m_streamId), message);
+					 emit streamError(obs_helpers::fromStdString(m_streamId), message);
 				 });
 	}
 

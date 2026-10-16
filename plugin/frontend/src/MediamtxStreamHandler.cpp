@@ -1,5 +1,6 @@
 #include <MediamtxStreamHandler.h>
 
+#include <obs-helpers.h>
 #include <obs-module.h>
 #include <plugin-support.h>
 
@@ -19,11 +20,11 @@ MediamtxStreamHandler::MediamtxStreamHandler(QObject *parent) : StreamHandler(pa
 				 const QString message =
 					 QStringLiteral("MediaMTX server error: %1").arg(static_cast<int>(error));
 				 obs_log(LOG_ERROR, "%s", qUtf8Printable(message));
-				 emit streamError(QString::fromStdString(m_streamId), message);
+				 emit streamError(obs_helpers::fromStdString(m_streamId), message);
 			 });
 	QObject::connect(m_manager, &MediamtxManager::inputAdded, this,
 			 [this](const QString &streamId, const QString &publishUrl) {
-				 if (streamId != QString::fromStdString(m_streamId)) {
+				 if (streamId != obs_helpers::fromStdString(m_streamId)) {
 					 return;
 				 }
 				 obs_log(LOG_INFO, "mediamtx input '%s' added: %s", qUtf8Printable(streamId),
@@ -31,23 +32,23 @@ MediamtxStreamHandler::MediamtxStreamHandler(QObject *parent) : StreamHandler(pa
 				 emit streamReady(streamId, publishUrl);
 			 });
 	QObject::connect(m_manager, &MediamtxManager::inputAvailable, this, [this](const QString &streamId) {
-		if (streamId == QString::fromStdString(m_streamId)) {
+		if (streamId == obs_helpers::fromStdString(m_streamId)) {
 			emit streamAvailable(streamId);
 		}
 	});
 	QObject::connect(m_manager, &MediamtxManager::inputUnavailable, this, [this](const QString &streamId) {
-		if (streamId == QString::fromStdString(m_streamId)) {
+		if (streamId == obs_helpers::fromStdString(m_streamId)) {
 			emit streamUnavailable(streamId);
 		}
 	});
 	QObject::connect(m_manager, &MediamtxManager::inputRemoved, this, [this](const QString &streamId) {
-		if (streamId == QString::fromStdString(m_streamId)) {
+		if (streamId == obs_helpers::fromStdString(m_streamId)) {
 			emit streamStopped(streamId);
 		}
 	});
 	QObject::connect(m_manager, &MediamtxManager::inputError, this,
 			 [this](const QString &streamId, const QString &error) {
-				 if (streamId == QString::fromStdString(m_streamId)) {
+				 if (streamId == obs_helpers::fromStdString(m_streamId)) {
 					 obs_log(LOG_ERROR, "mediamtx input '%s' error: %s", qUtf8Printable(streamId),
 						 qUtf8Printable(error));
 					 emit streamError(streamId, error);

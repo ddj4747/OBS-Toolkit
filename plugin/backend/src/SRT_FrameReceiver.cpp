@@ -349,8 +349,8 @@ void SRT_FrameReceiver::disconnectReceiver() {
 	stopReceiver();
 }
 
-bool SRT_FrameReceiver::active() const {
-	return m_active.load();
+bool SRT_FrameReceiver::active() {
+	return getBitrate() != 0;
 }
 
 uint32_t SRT_FrameReceiver::getBitrate() {

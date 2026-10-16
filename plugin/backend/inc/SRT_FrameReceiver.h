@@ -119,7 +119,7 @@ public:
 			     std::function<void(obs_source_audio)> &&audioCallback);
 	void disconnectReceiver();
 
-	NO_DISCARD bool active() const;
+	NO_DISCARD bool active();
 	uint32_t getBitrate();
 
 private:
@@ -147,6 +147,7 @@ private:
 
 	std::function<void(obs_source_frame)> m_frameCallback;
 	std::function<void(obs_source_audio)> m_audioCallback;
+
 	std::string m_streamID;
 	std::map<AVCodecID, const AVCodec *> m_codecs;
 
