@@ -31,6 +31,8 @@ target_link_libraries(
     FFmpeg::swresample
     httplib::httplib
     openssl::openssl
+    nlohmann_json::nlohmann_json
+    plugin_frontend
 )
 target_include_directories(plugin_backend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 

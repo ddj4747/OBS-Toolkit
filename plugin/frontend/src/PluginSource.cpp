@@ -1,5 +1,6 @@
 #include <PluginSource.h>
 
+#include "EventManager.h"
 #include "PluginDock.h"
 #include "PluginFrontend.h"
 
@@ -120,8 +121,23 @@ void PluginSource::prepareForShutdown() {
 	for (PluginSource *source : s_instances) {
 		source->prepareInstanceForShutdown();
 	}
-
 	MediamtxStreamHandler::prepareForShutdown();
+}
+
+std::vector<std::pair<std::string, uint64_t>> PluginSource::getBitrates() {
+	std::lock_guard<std::mutex> lock(s_instancesMutex);
+	std::vector<std::pair<std::string, uint64_t>> bitrates(s_instances.size());
+
+	int i = 0;
+	for (const auto source : s_instances) {
+		const obs_source *obsSource = source->getSource();
+		const char *name = obs_source_get_name(obsSource);
+
+		bitrates[i] = std::make_pair(name, source->getBitrate());
+		i++;
+	}
+
+	return bitrates;
 }
 
 PluginSource::PluginSource(obs_data_t *settings, obs_source_t *source) : m_source(source) {
@@ -140,10 +156,12 @@ PluginSource::PluginSource(obs_data_t *settings, obs_source_t *source) : m_sourc
 }
 
 PluginSource::~PluginSource() {
-	stopReceiver();
+	{
+		std::lock_guard<std::mutex> lock(s_instancesMutex);
+		s_instances.erase(this);
+	}
 
-	std::lock_guard<std::mutex> lock(s_instancesMutex);
-	s_instances.erase(this);
+	stopReceiver();
 }
 
 obs_source_t *PluginSource::getSource() const {
@@ -151,18 +169,20 @@ obs_source_t *PluginSource::getSource() const {
 }
 
 uint64_t PluginSource::getBitrate() const {
+	std::lock_guard<std::mutex> lock(m_frameReceiverMutex);
 	if (!m_frameReceiver) {
+		obs_log(LOG_INFO, "hit1");
 		return 0;
 	}
 
-	if (!m_frameReceiver->active()) {
-		return 0;
-	}
+	const uint64_t bitrate = m_frameReceiver->getBitrate();
+	obs_log(LOG_INFO, "hit3 %i", bitrate);
 
-	return m_frameReceiver->getBitrate();
+	return bitrate;
 }
 
 bool PluginSource::active() const {
+	std::lock_guard<std::mutex> lock(m_frameReceiverMutex);
 	if (!m_frameReceiver) {
 		return false;
 	}
@@ -345,6 +365,7 @@ void PluginSource::updateProperties() const {
 }
 
 void PluginSource::startFrameReceiver() {
+	std::lock_guard<std::mutex> lock(m_frameReceiverMutex);
 	if (m_frameReceiver) {
 		return;
 	}
@@ -368,6 +389,7 @@ void PluginSource::startFrameReceiver() {
 }
 
 void PluginSource::stopFrameReceiver() {
+	std::lock_guard<std::mutex> lock(m_frameReceiverMutex);
 	delete m_frameReceiver;
 	m_frameReceiver = nullptr;
 }

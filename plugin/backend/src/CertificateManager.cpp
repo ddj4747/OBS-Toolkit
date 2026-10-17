@@ -190,6 +190,24 @@ bool CertificateManager::isCertificateValid(const std::filesystem::path &certifi
 	return (notBefore == -1 || notBefore == 0) && notAfter == 1;
 }
 
+bool CertificateManager::isPrivateKeyValid(const std::filesystem::path &privateKeyPath) {
+	std::lock_guard lock(s_mutex);
+
+	std::ifstream file(privateKeyPath, std::ios::binary);
+	if (!file) {
+		return false;
+	}
+
+	const std::string contents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	const BioPtr bio(BIO_new_mem_buf(contents.data(), static_cast<int>(contents.size())), BIO_free);
+	if (!bio) {
+		return false;
+	}
+
+	const EvpPkeyPtr key(PEM_read_bio_PrivateKey(bio.get(), nullptr, nullptr, nullptr), EVP_PKEY_free);
+	return key != nullptr;
+}
+
 std::string CertificateManager::getCertificateFingerprint(const std::filesystem::path &certificatePath) {
 	std::lock_guard lock(s_mutex);
 

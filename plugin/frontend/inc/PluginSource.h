@@ -25,6 +25,7 @@ public:
 	static PluginSource *fromSource(obs_source_t *source);
 	static const char *id();
 	static void prepareForShutdown();
+	static std::vector<std::pair<std::string, uint64_t>> getBitrates();
 
 	NO_DISCARD obs_source_t *getSource() const;
 	NO_DISCARD uint64_t getBitrate() const;
@@ -83,6 +84,7 @@ private:
 	PortForwarder *m_portForwarder{nullptr};
 	PortForwarder *m_secondaryPortForwarder{nullptr};
 	SRT_FrameReceiver *m_frameReceiver{nullptr};
+	mutable std::mutex m_frameReceiverMutex;
 	StreamHandler *m_streamHandler{nullptr};
 	uint8_t m_pendingPortForwards{0};
 

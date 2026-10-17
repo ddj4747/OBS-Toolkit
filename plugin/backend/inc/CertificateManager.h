@@ -15,6 +15,7 @@ public:
 	static bool generateCertificate(const std::filesystem::path &privateKeyPath,
 					const std::filesystem::path &certificatePath);
 	NO_DISCARD static bool isCertificateValid(const std::filesystem::path &certificatePath);
+	NO_DISCARD static bool isPrivateKeyValid(const std::filesystem::path &privateKeyPath);
 	NO_DISCARD static std::string getCertificateFingerprint(const std::filesystem::path &certificatePath);
 
 private:

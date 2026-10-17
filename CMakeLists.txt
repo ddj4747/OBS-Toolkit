@@ -23,6 +23,7 @@ find_package(magic_enum REQUIRED)
 find_package(miniupnpc REQUIRED)
 find_package(httplib REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(nlohmann_json REQUIRED)
 find_package(
   FFmpeg
   REQUIRED

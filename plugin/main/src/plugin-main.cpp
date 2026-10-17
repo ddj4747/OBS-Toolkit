@@ -24,6 +24,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <EventManager.h>
 #include <PluginFrontend.h>
 #include <PluginSource.h>
+#include <API_Endpoint.h>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
@@ -63,6 +64,13 @@ void on_frontend_event(const obs_frontend_event event, void *) {
 
 bool obs_module_load(void) {
 	PluginSource::registerType();
+
+	if (!API_Endpoint::getInstance().start()) {
+		return false;
+	}
+
+	API_Endpoint::getInstance().setAccessKey("test123");
+
 	obs_frontend_add_event_callback(on_frontend_event, nullptr);
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;
@@ -75,8 +83,10 @@ void obs_module_unload(void) {
 		PluginFrontend::stop();
 	}
 
+	API_Endpoint::getInstance().stop();
+
 	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
 
 	EventManager::destroy();
-	obs_log(LOG_INFO, "plugin unloaded");
+	obs_log(LOG_INFO, "plugin unloaded (version %s)", PLUGIN_VERSION);
 }

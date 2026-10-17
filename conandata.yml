@@ -6,3 +6,4 @@ requirements:
     - "magic_enum/0.9.8"
     - "cpp-httplib/0.61.0"
     - "openssl/4.0.3"
+    - "nlohmann_json/3.12.0"

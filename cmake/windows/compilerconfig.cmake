@@ -73,5 +73,5 @@ add_link_options(
 )
 
 if(CMAKE_COMPILE_WARNING_AS_ERROR)
-  add_link_options(/WX)
+  add_link_options(/WX /IGNORE:4099)
 endif()
