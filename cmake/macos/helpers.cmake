@@ -93,6 +93,70 @@ function(target_install_resources target)
   endif()
 endfunction()
 
+# Point single-architecture Conan static libraries at the universal archives created by configure.py.
+function(use_macos_universal_conan_libraries)
+  set(universal_lib_dir "${CMAKE_SOURCE_DIR}/.deps/conan-macos-universal/lib")
+  if(NOT EXISTS "${universal_lib_dir}/libssl.a" OR NOT EXISTS "${universal_lib_dir}/libcrypto.a")
+    message(
+      FATAL_ERROR
+      "Universal OpenSSL archives are missing in ${universal_lib_dir}. "
+      "Run configure.py before configuring the project."
+    )
+  endif()
+
+  set(
+    location_properties
+    IMPORTED_LOCATION
+    IMPORTED_LOCATION_RELEASE
+    IMPORTED_LOCATION_RELWITHDEBINFO
+    IMPORTED_LOCATION_MINSIZEREL
+  )
+  set(retargeted_ssl FALSE)
+  set(retargeted_crypto FALSE)
+
+  get_property(imported_targets DIRECTORY PROPERTY IMPORTED_TARGETS)
+  foreach(imported_target IN LISTS imported_targets)
+    get_target_property(aliased "${imported_target}" ALIASED_TARGET)
+    if(aliased)
+      continue()
+    endif()
+
+    get_target_property(target_type "${imported_target}" TYPE)
+    if(NOT target_type MATCHES "^(STATIC_LIBRARY|UNKNOWN_LIBRARY)$")
+      continue()
+    endif()
+
+    foreach(location_property IN LISTS location_properties)
+      get_target_property(location "${imported_target}" "${location_property}")
+      if(NOT location OR location MATCHES "-NOTFOUND$")
+        continue()
+      endif()
+
+      cmake_path(GET location FILENAME filename)
+      set(universal_library "${universal_lib_dir}/${filename}")
+      if(NOT EXISTS "${universal_library}")
+        continue()
+      endif()
+
+      set_target_properties("${imported_target}" PROPERTIES "${location_property}" "${universal_library}")
+      message(STATUS "Using universal ${filename} for ${imported_target} (${location_property})")
+      if(filename STREQUAL "libssl.a")
+        set(retargeted_ssl TRUE)
+      elseif(filename STREQUAL "libcrypto.a")
+        set(retargeted_crypto TRUE)
+      endif()
+    endforeach()
+  endforeach()
+
+  if(NOT retargeted_ssl OR NOT retargeted_crypto)
+    message(
+      FATAL_ERROR
+      "OpenSSL import targets still point at single-architecture libraries. "
+      "Universal libssl.a and libcrypto.a were not applied."
+    )
+  endif()
+endfunction()
+
 # target_add_resource: Helper function to add a specific resource to a bundle
 function(target_add_resource target resource)
   message(DEBUG "Add resource ${resource} to target ${target}...")

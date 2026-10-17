@@ -381,46 +381,85 @@ def run_conan_install(build_type: str, arch: str | None = None, output_folder: s
         sys.exit(result.returncode)
 
 
-def conan_package_folder(generators_dir: Path, package_name: str) -> Path:
-    for data_file in generators_dir.glob(f"{package_name}-*-data.cmake"):
+def conan_package_folder(generators_dir: Path, package_name: str, required: bool = True) -> Path | None:
+    pattern = re.compile(rf'set\({re.escape(package_name)}_PACKAGE_FOLDER_RELEASE "([^"]+)"\)')
+    for data_file in generators_dir.glob("*-data.cmake"):
         contents = data_file.read_text(encoding="utf-8")
-        match = re.search(rf'set\({package_name}_PACKAGE_FOLDER_RELEASE "([^"]+)"\)', contents)
-        if match:
-            return Path(match.group(1))
+        match = pattern.search(contents)
+        if not match:
+            continue
 
-    print(f"Could not locate the Conan package folder for {package_name} in {generators_dir}")
-    sys.exit(-1)
+        folder = Path(match.group(1))
+        if not folder.is_absolute():
+            folder = (data_file.parent / folder).resolve()
+        return folder
+
+    if required:
+        print(f"Could not locate the Conan package folder for {package_name} in {generators_dir}")
+        sys.exit(-1)
+
+    print(f"No Conan package folder for optional dependency {package_name}")
+    return None
 
 
-def create_macos_universal_miniupnpc():
+def lipo_static_libraries(package_name: str, arm_package: Path, x86_package: Path, universal_lib_dir: Path) -> list[str]:
+    arm_lib_dir = arm_package / "lib"
+    x86_lib_dir = x86_package / "lib"
+    arm_libs = sorted(path for path in arm_lib_dir.glob("*.a") if path.is_file())
+    if not arm_libs:
+        print(f"No static libraries in {arm_lib_dir} for {package_name}")
+        sys.exit(-1)
+
+    x86_libs = {path.name: path for path in x86_lib_dir.glob("*.a") if path.is_file()}
+    created: list[str] = []
+    for arm_lib in arm_libs:
+        x86_lib = x86_libs.get(arm_lib.name)
+        if x86_lib is None:
+            print(f"Missing x86_64 static library {arm_lib.name} for {package_name}")
+            sys.exit(-1)
+
+        output = universal_lib_dir / arm_lib.name
+        result = subprocess.run(
+            ["lipo", "-create", "-output", str(output), str(arm_lib), str(x86_lib)],
+        )
+        if result.returncode != 0:
+            print(f"Failed to create universal {output} (exit {result.returncode})")
+            sys.exit(result.returncode)
+
+        created.append(arm_lib.name)
+        print(f"Created universal {package_name} library {output}")
+
+    return created
+
+
+def create_macos_universal_libraries():
     arm_generators = Path("build/Release/generators")
     x86_generators = Path("build/Release-x86_64/build/Release/generators")
-    arm_package = conan_package_folder(arm_generators, "miniupnpc")
-    x86_package = conan_package_folder(x86_generators, "miniupnpc")
-
     universal_dir = Path(".deps/conan-macos-universal")
     universal_include_dir = universal_dir / "include"
     universal_lib_dir = universal_dir / "lib"
-    universal_lib = universal_lib_dir / "libminiupnpc.a"
 
     shutil.rmtree(universal_dir, ignore_errors=True)
     universal_include_dir.mkdir(parents=True)
     universal_lib_dir.mkdir(parents=True)
-    shutil.copytree(arm_package / "include", universal_include_dir, dirs_exist_ok=True)
 
-    result = subprocess.run(
-        [
-            "lipo",
-            "-create",
-            "-output",
-            str(universal_lib),
-            str(arm_package / "lib/libminiupnpc.a"),
-            str(x86_package / "lib/libminiupnpc.a"),
-        ]
-    )
-    if result.returncode != 0:
-        print(f"Failed to create universal miniupnpc archive (exit {result.returncode})")
-        sys.exit(result.returncode)
+    arm_miniupnpc = conan_package_folder(arm_generators, "miniupnpc")
+    x86_miniupnpc = conan_package_folder(x86_generators, "miniupnpc")
+    shutil.copytree(arm_miniupnpc / "include", universal_include_dir, dirs_exist_ok=True)
+    lipo_static_libraries("miniupnpc", arm_miniupnpc, x86_miniupnpc, universal_lib_dir)
+
+    arm_openssl = conan_package_folder(arm_generators, "openssl")
+    x86_openssl = conan_package_folder(x86_generators, "openssl")
+    openssl_libs = lipo_static_libraries("openssl", arm_openssl, x86_openssl, universal_lib_dir)
+    missing_openssl = [name for name in ("libssl.a", "libcrypto.a") if name not in openssl_libs]
+    if missing_openssl:
+        print(f"OpenSSL package is missing required static libraries: {', '.join(missing_openssl)}")
+        sys.exit(-1)
+
+    arm_zlib = conan_package_folder(arm_generators, "zlib", required=False)
+    if arm_zlib:
+        x86_zlib = conan_package_folder(x86_generators, "zlib")
+        lipo_static_libraries("zlib", arm_zlib, x86_zlib, universal_lib_dir)
 
 
 shutil.rmtree("build", ignore_errors=True)
@@ -434,7 +473,7 @@ run_conan_install("Release")
 
 if current_platform == "darwin":
     run_conan_install("Release", arch="x86_64", output_folder="build/Release-x86_64")
-    create_macos_universal_miniupnpc()
+    create_macos_universal_libraries()
 
 disable_debug = os.environ.get("DISABLE_DEBUG", "").lower()
 if disable_debug not in ("true", "1", "yes", "on"):

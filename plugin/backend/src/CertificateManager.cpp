@@ -120,8 +120,7 @@ bool addCaBasicConstraints(X509 *certificate) {
 	X509V3_set_ctx_nodb(&context);
 	X509V3_set_ctx(&context, certificate, certificate, nullptr, nullptr, 0);
 
-	X509_EXTENSION *extension =
-		X509V3_EXT_conf_nid(nullptr, &context, NID_basic_constraints, "critical,CA:TRUE");
+	X509_EXTENSION *extension = X509V3_EXT_conf_nid(nullptr, &context, NID_basic_constraints, "critical,CA:TRUE");
 	const bool added = extension && X509_add_ext(certificate, extension, -1) == 1;
 	X509_EXTENSION_free(extension);
 	return added;

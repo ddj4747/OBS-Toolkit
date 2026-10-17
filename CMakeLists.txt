@@ -30,6 +30,10 @@ find_package(
   COMPONENTS avcodec avformat avutil swscale swresample
 )
 
+if(OS_MACOS)
+  use_macos_universal_conan_libraries()
+endif()
+
 if(OS_WINDOWS)
   get_property(_imported_targets DIRECTORY PROPERTY IMPORTED_TARGETS)
   foreach(_target IN LISTS _imported_targets)
