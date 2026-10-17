@@ -33,3 +33,5 @@ OBS_STUDIO_PATH=/
 EOF
 
 python3 configure.py
+
+conan cache clean "*" --source --build --download --temp

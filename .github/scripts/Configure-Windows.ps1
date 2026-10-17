@@ -45,3 +45,9 @@ OBS_STUDIO_PATH=C:/
 "@ | Set-Content -Path '.env' -Encoding utf8NoBOM
 
 python configure.py
+if ($LASTEXITCODE -ne 0)
+{
+    exit $LASTEXITCODE
+}
+
+conan cache clean "*" --source --build --download --temp

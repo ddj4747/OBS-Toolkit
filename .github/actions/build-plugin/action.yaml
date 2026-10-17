@@ -27,6 +27,14 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Cache Conan Packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.conan2/p
+        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-${{ hashFiles('conandata.yml', 'conanfile.py', 'configure.py') }}
+        restore-keys: |
+          conan-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-
+
     - name: Run macOS Configure Script
       if: runner.os == 'macOS'
       shell: zsh --no-rcs --errexit --pipefail {0}
@@ -54,11 +62,11 @@ runs:
 
         .github/scripts/build-macos ${build_args}
 
-    - name: Install Dependencies 🛍️
+    - name: Install Dependencies
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        : Install Dependencies 🛍️
+        : Install Dependencies
         echo ::group::Install Dependencies
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         echo "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin" >> $GITHUB_PATH
@@ -116,13 +124,13 @@ runs:
 
         .github/scripts/Build-Windows.ps1 @BuildArgs
 
-    - name: Create Summary 📊
+    - name: Create Summary
       if: contains(fromJSON('["Linux", "macOS"]'),runner.os)
       shell: zsh --no-rcs --errexit --pipefail {0}
       env:
         CCACHE_DIR: ${{ inputs.workingDirectory }}/.ccache
       run: |
-        : Create Summary 📊
+        : Create Summary
 
         local -a ccache_data
         if (( ${+RUNNER_DEBUG} )) {
