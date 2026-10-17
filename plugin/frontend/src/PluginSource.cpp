@@ -171,14 +171,10 @@ obs_source_t *PluginSource::getSource() const {
 uint64_t PluginSource::getBitrate() const {
 	std::lock_guard<std::mutex> lock(m_frameReceiverMutex);
 	if (!m_frameReceiver) {
-		obs_log(LOG_INFO, "hit1");
 		return 0;
 	}
 
-	const uint64_t bitrate = m_frameReceiver->getBitrate();
-	obs_log(LOG_INFO, "hit3 %i", bitrate);
-
-	return bitrate;
+	return m_frameReceiver->getBitrate();
 }
 
 bool PluginSource::active() const {
@@ -573,10 +569,5 @@ void PluginSource::OnActivate(void *data) {
 
 void PluginSource::OnDeactivate(void *data) {
 	PluginSource *source = static_cast<PluginSource *>(data);
-	if (!source->m_activated) {
-		return;
-	}
-
 	source->m_activated = false;
-	source->stopReceiver();
 }
