@@ -5,6 +5,7 @@
 #include <callback/calldata.h>
 #include <functional>
 #include <string>
+#include <qrcodegencpp/qrcodegen.hpp>
 
 struct obs_source;
 
@@ -17,6 +18,7 @@ QIcon getIconFromSource(const obs_source *source);
 QIcon getIconFromPath(const QString &path);
 NO_DISCARD uint64_t connectSourceEditSignals(std::function<void(calldata_t *cd)> callback);
 void disconnectSourceEditSignals(uint64_t id);
+QPixmap getQrFromURL(const QString &url, qrcodegen::QrCode::Ecc errCorrection);
 
 inline QString fromStdString(const std::string &str) {
 	return QString::fromUtf8(str.data(), static_cast<qsizetype>(str.size()));

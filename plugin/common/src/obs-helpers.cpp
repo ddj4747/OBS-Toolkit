@@ -4,6 +4,7 @@
 #include <obs.h>
 
 #include <QIcon>
+#include <QImage>
 #include <QListWidgetItem>
 #include <mutex>
 #include <ranges>
@@ -11,6 +12,28 @@
 #include <plugin-support.h>
 
 namespace obs_helpers {
+
+QPixmap getQrFromURL(const QString &url, qrcodegen::QrCode::Ecc errCorrection) {
+	const QByteArray utf8 = url.toUtf8();
+	const qrcodegen::QrCode qr = qrcodegen::QrCode::encodeText(utf8.constData(), errCorrection);
+
+	const int qrSize = qr.getSize();
+	constexpr int border = 4;
+	const int totalSize = qrSize + (border * 2);
+
+	QImage img(totalSize, totalSize, QImage::Format_RGB32);
+	img.fill(Qt::white);
+
+	for (int y = 0; y < qrSize; y++) {
+		for (int x = 0; x < qrSize; x++) {
+			if (qr.getModule(x, y)) {
+				img.setPixel(x + border, y + border, qRgb(0, 0, 0));
+			}
+		}
+	}
+
+	return QPixmap::fromImage(img);
+}
 
 QIcon getIconFromSource(const obs_source *source) {
 	if (!source) {

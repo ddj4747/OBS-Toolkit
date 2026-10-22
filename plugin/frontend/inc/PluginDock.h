@@ -36,6 +36,7 @@ protected:
 
 private slots:
 	static void onSettingsClicked();
+	void onWebPanelClicked();
 	void onSourcesListSelectionChanged() const;
 	void onMoveUpSourceClicked();
 	void onMoveDownSourceClicked();
@@ -64,4 +65,5 @@ private:
 	QAction *m_sourceSettingsAction{nullptr};
 	QAction *m_moveUpSourceAction{nullptr};
 	QAction *m_moveDownSourceAction{nullptr};
+	QAction *m_webPanelSettingsAction{nullptr};
 };

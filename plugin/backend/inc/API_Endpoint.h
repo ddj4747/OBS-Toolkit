@@ -2,8 +2,10 @@
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
+#include <mutex>
 #include <thread>
 #include <httplib/httplib.h>
+#include <PortForwardUtils.h>
 
 class API_Endpoint final {
 public:
@@ -14,6 +16,11 @@ public:
 	void stop();
 
 	void setAccessKey(const std::string &accessKey);
+	void setEnabled(bool enabled);
+	uint16_t getPort();
+	QString getIp() const;
+
+private slots:
 
 private:
 	void registerEndpoints() const;
@@ -21,5 +28,8 @@ private:
 
 	std::thread m_httpThread;
 	std::unique_ptr<httplib::SSLServer> m_server;
+	mutable std::mutex m_authMutex;
 	std::string m_accessKey{};
+	std::unique_ptr<PortForwarder> m_portForwarder;
+	bool m_enabled{true};
 };

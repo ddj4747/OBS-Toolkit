@@ -69,8 +69,6 @@ bool obs_module_load(void) {
 		return false;
 	}
 
-	API_Endpoint::getInstance().setAccessKey("test123");
-
 	obs_frontend_add_event_callback(on_frontend_event, nullptr);
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;

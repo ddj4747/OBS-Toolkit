@@ -20,7 +20,14 @@ target_sources(plugin_frontend PRIVATE ${PLUGIN_FRONTEND_SOURCES} ${PLUGIN_FRONT
 target_link_libraries(
   plugin_frontend
   PUBLIC plugin_backend
-  PRIVATE Qt6::Core Qt6::Widgets OBS::obs-frontend-api OBS::libobs plugin_common magic_enum::magic_enum
+  PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+    OBS::obs-frontend-api
+    OBS::libobs
+    plugin_common
+    magic_enum::magic_enum
+    qr-code-generator::qr-code-generator
 )
 target_include_directories(plugin_frontend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 

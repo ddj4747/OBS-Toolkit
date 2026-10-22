@@ -18,8 +18,10 @@
 namespace {
 const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
 const QString SETTINGS_ICON_PATH = QStringLiteral("settings/general.svg");
+const QString WEB_PANEL_ICON_PATH = QStringLiteral("sources/globe.svg");
 const QString ARROW_UP_ICON_PATH = QStringLiteral("up.svg");
 const QString ARROW_DOWN_ICON_PATH = QStringLiteral("down.svg");
+
 QIcon streamStatusIcon(const bool active) {
 	if (active) {
 		return QIcon(QStringLiteral(":/res/images/streaming-active.svg"));
@@ -27,6 +29,7 @@ QIcon streamStatusIcon(const bool active) {
 	return QIcon(obs_frontend_is_theme_dark() ? QStringLiteral("theme:Dark/streaming-inactive.svg")
 						  : QStringLiteral(":/res/images/streaming-inactive.svg"));
 }
+
 constexpr int TYPE_ICON_ROLE = Qt::UserRole;
 constexpr int STATUS_ICON_ROLE = Qt::UserRole + 1;
 constexpr int STATUS_ACTIVE_ROLE = Qt::UserRole + 2;
@@ -131,6 +134,10 @@ PluginDock::PluginDock(QWidget *parent)
 	m_moveDownSourceAction = m_toolbar->addAction(obs_helpers::getIconFromPath(ARROW_DOWN_ICON_PATH),
 						      "Move Source Downward", this,
 						      &PluginDock::onMoveDownSourceClicked);
+	m_toolbar->addSeparator();
+
+	m_webPanelSettingsAction = m_toolbar->addAction(obs_helpers::getIconFromPath(WEB_PANEL_ICON_PATH), "Web Panel",
+							this, &PluginDock::onWebPanelClicked);
 
 	m_moveDownSourceAction->setEnabled(false);
 	m_moveUpSourceAction->setEnabled(false);
@@ -352,6 +359,7 @@ void PluginDock::updateActionIcons() const {
 	m_settingsAction->setIcon(obs_helpers::getIconFromPath(SETTINGS_ICON_PATH));
 	m_moveUpSourceAction->setIcon(obs_helpers::getIconFromPath(ARROW_UP_ICON_PATH));
 	m_moveDownSourceAction->setIcon(obs_helpers::getIconFromPath(ARROW_DOWN_ICON_PATH));
+	m_webPanelSettingsAction->setIcon(obs_helpers::getIconFromPath(WEB_PANEL_ICON_PATH));
 }
 
 void PluginDock::saveSourcesList() {
@@ -406,6 +414,14 @@ void PluginDock::onSettingsClicked() {
 	}
 
 	PluginFrontend::get()->showSettingsWindow();
+}
+
+void PluginDock::onWebPanelClicked() {
+	if (!PluginFrontend::isRunning()) {
+		return;
+	}
+
+	PluginFrontend::get()->showWebPanelWindow();
 }
 
 void PluginDock::onSourcesListSelectionChanged() const {

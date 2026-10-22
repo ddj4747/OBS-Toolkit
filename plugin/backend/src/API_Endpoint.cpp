@@ -51,7 +51,10 @@ bool API_Endpoint::start() {
 	}
 
 	const QUuid uuid = QUuid::createUuid();
-	m_accessKey = obs_helpers::toStdString(uuid.toString());
+	{
+		std::lock_guard<std::mutex> lock(m_authMutex);
+		m_accessKey = obs_helpers::toStdString(uuid.toString());
+	}
 
 	m_server = std::make_unique<httplib::SSLServer>(certPath.string().c_str(), keyPath.string().c_str());
 	if (!m_server->is_valid()) {
@@ -66,7 +69,11 @@ bool API_Endpoint::start() {
 		return false;
 	}
 
+	m_portForwarder = std::make_unique<PortForwarder>(getPort(), PortForwarder::Protocol::TCP);
+	m_portForwarder->forward();
+
 	m_httpThread = std::thread([this] { m_server->listen_after_bind(); });
+
 	return true;
 }
 
@@ -80,7 +87,20 @@ void API_Endpoint::stop() {
 }
 
 bool API_Endpoint::authorize(const httplib::Request &req, httplib::Response &res) const {
-	if (req.get_header_value("Authorization") != m_accessKey) {
+	std::string accessKey;
+	bool enabled = false;
+	{
+		std::lock_guard<std::mutex> lock(m_authMutex);
+		accessKey = m_accessKey;
+		enabled = m_enabled;
+	}
+
+	if (!enabled) {
+		res.status = 403;
+		return false;
+	}
+
+	if (req.get_header_value("Authorization") != accessKey) {
 		res.status = 401;
 		return false;
 	}
@@ -89,7 +109,30 @@ bool API_Endpoint::authorize(const httplib::Request &req, httplib::Response &res
 }
 
 void API_Endpoint::setAccessKey(const std::string &accessKey) {
+	std::lock_guard<std::mutex> lock(m_authMutex);
 	m_accessKey = accessKey;
+}
+
+void API_Endpoint::setEnabled(const bool enabled) {
+	std::lock_guard<std::mutex> lock(m_authMutex);
+	m_enabled = enabled;
+}
+
+uint16_t API_Endpoint::getPort() {
+	return API_SERVER_PORT;
+}
+
+QString API_Endpoint::getIp() const {
+	if (!m_portForwarder) {
+		return {};
+	}
+
+	const std::optional<std::string> address = m_portForwarder->publicAddress();
+	if (!address.has_value()) {
+		return {};
+	}
+
+	return QString::fromUtf8(address->data(), static_cast<qsizetype>(address->size()));
 }
 
 void API_Endpoint::registerEndpoints() const {

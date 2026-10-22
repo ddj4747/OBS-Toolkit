@@ -4,6 +4,7 @@
 #include <PluginDock.h>
 
 #include <PluginSettingsWindow.h>
+#include <PluginWebPanelWindow.h>
 
 #ifndef NO_DISCARD
 #define NO_DISCARD [[nodiscard]]
@@ -39,6 +40,10 @@ public:
 
 	void showSettingsWindow() const;
 
+	void hideWebPanelWindow() const;
+
+	void showWebPanelWindow() const;
+
 	obs_data_t *getSettingsObject();
 
 	void saveSettingsObject() const;
@@ -53,6 +58,7 @@ private:
 	PluginDock *m_pluginDock;
 	obs_data *m_settings{nullptr};
 	PluginSettingsWindow *m_pluginSettingsWindow;
+	PluginWebPanelWindow *m_pluginWebPanelWindow;
 
 	bool m_shutdownPrepared{false};
 };

@@ -55,12 +55,18 @@ PluginFrontend::PluginFrontend(QMainWindow *window) {
 	s_instance = this;
 	m_pluginDock = new PluginDock(window);
 	m_pluginSettingsWindow = new PluginSettingsWindow(window);
+	m_pluginWebPanelWindow = new PluginWebPanelWindow(window);
 }
 
 PluginFrontend::~PluginFrontend() {
 	if (m_pluginSettingsWindow) {
 		m_pluginSettingsWindow->hide();
 		m_pluginSettingsWindow = nullptr;
+	}
+
+	if (m_pluginWebPanelWindow) {
+		m_pluginWebPanelWindow->hide();
+		m_pluginWebPanelWindow = nullptr;
 	}
 
 	if (m_pluginDock) {
@@ -84,6 +90,10 @@ void PluginFrontend::prepareForShutdown() {
 		m_pluginSettingsWindow->hide();
 	}
 
+	if (m_pluginWebPanelWindow) {
+		m_pluginWebPanelWindow->hide();
+	}
+
 	if (m_pluginDock) {
 		m_pluginDock->prepareForShutdown();
 	}
@@ -103,6 +113,22 @@ void PluginFrontend::showSettingsWindow() const {
 	}
 
 	m_pluginSettingsWindow->show();
+}
+
+void PluginFrontend::hideWebPanelWindow() const {
+	if (!m_pluginWebPanelWindow->isVisible()) {
+		return;
+	}
+
+	m_pluginWebPanelWindow->hide();
+}
+
+void PluginFrontend::showWebPanelWindow() const {
+	if (m_pluginWebPanelWindow->isVisible()) {
+		return;
+	}
+
+	m_pluginWebPanelWindow->show();
 }
 
 obs_data_t *PluginFrontend::getSettingsObject() {
