@@ -85,6 +85,8 @@ private:
 	static constexpr uint16_t c_srtlaPort = 5000;
 	static constexpr uint16_t c_rtmpPort = 1935;
 	static constexpr uint16_t c_rtspPort = 8554;
+	static constexpr uint16_t c_rtspRtpPort = 8000;
+	static constexpr uint16_t c_rtspRtcpPort = 8001;
 	static constexpr uint16_t c_webrtcHttpPort = 8889;
 	static constexpr uint16_t c_webrtcIcePort = 8189;
 	static constexpr uint16_t c_moqHttpPort = 8892;

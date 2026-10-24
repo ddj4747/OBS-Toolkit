@@ -4,6 +4,8 @@ srt: yes
 srtAddress: :8890
 rtsp: yes
 rtspAddress: :8554
+rtpAddress: :8000
+rtcpAddress: :8001
 rtmp: yes
 rtmpAddress: :1935
 webrtc: yes

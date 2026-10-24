@@ -199,7 +199,9 @@ std::vector<PluginSource::ForwardingConfig> PluginSource::forwardingConfigs() co
 	case StreamProtocol::RTMP:
 		return {{c_rtmpPort, PortForwarder::Protocol::TCP}};
 	case StreamProtocol::RTSP:
-		return {{c_rtspPort, PortForwarder::Protocol::TCP}};
+		return {{c_rtspPort, PortForwarder::Protocol::TCP},
+			{c_rtspRtpPort, PortForwarder::Protocol::UDP},
+			{c_rtspRtcpPort, PortForwarder::Protocol::UDP}};
 	case StreamProtocol::WebRTC:
 		return {{c_webrtcHttpPort, PortForwarder::Protocol::TCP}, {c_webrtcIcePort, PortForwarder::Protocol::UDP}};
 	case StreamProtocol::MoQ:
