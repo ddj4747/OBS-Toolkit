@@ -8,3 +8,7 @@ rtmp: yes
 rtmpAddress: :1935
 webrtc: yes
 webrtcAddress: :8889
+moq: yes
+moqHTTP2Address: :8892
+moqHTTP3Address: :8892
+moqQUICAddress: :8893

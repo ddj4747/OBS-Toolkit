@@ -25,141 +25,6 @@
 #include <format>
 #include <QUuid>
 
-namespace {
-constexpr uint16_t SRT_PORT = 8890;
-constexpr uint16_t SRTLA_PORT = 5000;
-constexpr uint16_t RTMP_PORT = 1935;
-constexpr uint16_t RTSP_PORT = 8554;
-constexpr uint16_t WEBRTC_HTTP_PORT = 8889;
-constexpr uint16_t WEBRTC_ICE_PORT = 8189;
-constexpr int LARIX_SRT_LATENCY_MS = 2000;
-
-struct ForwardingConfig {
-	uint16_t port;
-	PortForwarder::Protocol protocol;
-};
-
-ForwardingConfig forwardingConfigFor(const StreamProtocol protocol) {
-	switch (protocol) {
-	case StreamProtocol::SRTLA:
-		return {SRTLA_PORT, PortForwarder::Protocol::UDP};
-	case StreamProtocol::SRT:
-		return {SRT_PORT, PortForwarder::Protocol::UDP};
-	case StreamProtocol::RTMP:
-		return {RTMP_PORT, PortForwarder::Protocol::TCP};
-	case StreamProtocol::RTSP:
-		return {RTSP_PORT, PortForwarder::Protocol::TCP};
-	case StreamProtocol::WebRTC:
-		return {WEBRTC_HTTP_PORT, PortForwarder::Protocol::TCP};
-	default:
-		return {PortForwarder::getAvailablePort(), PortForwarder::Protocol::UDP};
-	}
-}
-
-void deleteOnOwningThread(QObject *object) {
-	if (!object) {
-		return;
-	}
-
-	if (object->thread() == QThread::currentThread()) {
-		delete object;
-		return;
-	}
-
-	QMetaObject::invokeMethod(object, [object]() { delete object; }, Qt::BlockingQueuedConnection);
-}
-
-void copySettingToClipboard(const PluginSource *source, const char *key) {
-	obs_data_t *settings = obs_source_get_settings(source->getSource());
-	QGuiApplication::clipboard()->setText(QString::fromUtf8(obs_data_get_string(settings, key)));
-	obs_data_release(settings);
-}
-
-bool onCopyStreamIdClicked(obs_properties_t *, obs_property_t *, void *data) {
-	copySettingToClipboard(static_cast<PluginSource *>(data), "StreamId");
-	return false;
-}
-
-bool onCopyStreamUrlClicked(obs_properties_t *, obs_property_t *, void *data) {
-	copySettingToClipboard(static_cast<PluginSource *>(data), "StreamUrl");
-	return false;
-}
-
-constexpr const char *LARIX_QR_NAME = "pluginSourceLarixQr";
-constexpr int LARIX_QR_SIDE = 360;
-
-void attachLarixQr(const QString &link) {
-	QLabel *streamUrlLabel = nullptr;
-	for (QWidget *top : QApplication::topLevelWidgets()) {
-		for (QLabel *label : top->findChildren<QLabel *>()) {
-			if (label->objectName() == QLatin1String(LARIX_QR_NAME)) {
-				continue;
-			}
-			if (label->text() == QStringLiteral("Stream URL")) {
-				streamUrlLabel = label;
-				break;
-			}
-		}
-		if (streamUrlLabel) {
-			break;
-		}
-	}
-	if (!streamUrlLabel) {
-		return;
-	}
-
-	QWidget *container = streamUrlLabel->parentWidget();
-	auto *layout = container ? qobject_cast<QFormLayout *>(container->layout()) : nullptr;
-	if (!layout) {
-		return;
-	}
-
-	int streamUrlRow = -1;
-	for (int row = 0; row < layout->rowCount(); ++row) {
-		QLayoutItem *item = layout->itemAt(row, QFormLayout::LabelRole);
-		if (item && item->widget() == streamUrlLabel) {
-			streamUrlRow = row;
-			break;
-		}
-	}
-	if (streamUrlRow < 0) {
-		return;
-	}
-
-	auto *preview = container->findChild<QLabel *>(QLatin1String(LARIX_QR_NAME), Qt::FindDirectChildrenOnly);
-	if (!preview) {
-		preview = new QLabel(container);
-		preview->setObjectName(QLatin1String(LARIX_QR_NAME));
-		preview->setAlignment(Qt::AlignCenter);
-		preview->setMinimumSize(LARIX_QR_SIDE, LARIX_QR_SIDE);
-		const int insertAt = std::min(streamUrlRow + 2, layout->rowCount());
-		layout->insertRow(insertAt, new QLabel(QStringLiteral("QR Code"), container), preview);
-	}
-
-	if (link.isEmpty()) {
-		preview->setPixmap(QPixmap());
-		preview->setText(QStringLiteral("No link yet"));
-		return;
-	}
-
-	const QPixmap qr = obs_helpers::getQrFromURL(link, qrcodegen::QrCode::Ecc::LOW);
-	if (qr.isNull()) {
-		preview->setPixmap(QPixmap());
-		preview->setText(QStringLiteral("Could not create QR code"));
-		return;
-	}
-
-	const int modules = std::max(1, qr.width());
-	const int factor = std::max(1, LARIX_QR_SIDE / modules);
-	preview->setText(QString());
-	preview->setPixmap(qr.scaled(modules * factor, modules * factor, Qt::KeepAspectRatio, Qt::FastTransformation));
-}
-
-void scheduleLarixQr(const QString &link) {
-	QTimer::singleShot(0, QCoreApplication::instance(), [link]() { attachLarixQr(link); });
-}
-} // namespace
-
 std::mutex PluginSource::s_instancesMutex;
 std::set<PluginSource *> PluginSource::s_instances;
 std::atomic<bool> PluginSource::s_shutdownPrepared = false;
@@ -325,47 +190,157 @@ std::string PluginSource::generateStreamId() {
 	return uuidStr.substr(1, uuidStr.size() - 2);
 }
 
+std::vector<PluginSource::ForwardingConfig> PluginSource::forwardingConfigs() const {
+	switch (m_protocol) {
+	case StreamProtocol::SRTLA:
+		return {{c_srtlaPort, PortForwarder::Protocol::UDP}};
+	case StreamProtocol::SRT:
+		return {{c_srtPort, PortForwarder::Protocol::UDP}};
+	case StreamProtocol::RTMP:
+		return {{c_rtmpPort, PortForwarder::Protocol::TCP}};
+	case StreamProtocol::RTSP:
+		return {{c_rtspPort, PortForwarder::Protocol::TCP}};
+	case StreamProtocol::WebRTC:
+		return {{c_webrtcHttpPort, PortForwarder::Protocol::TCP}, {c_webrtcIcePort, PortForwarder::Protocol::UDP}};
+	case StreamProtocol::MoQ:
+		return {{c_moqHttpPort, PortForwarder::Protocol::TCP},
+			{c_moqHttpPort, PortForwarder::Protocol::UDP},
+			{c_moqQuicPort, PortForwarder::Protocol::UDP}};
+	default:
+		return {{PortForwarder::getAvailablePort(), PortForwarder::Protocol::UDP}};
+	}
+}
+
+void PluginSource::deleteOnOwningThread(QObject *object) {
+	if (!object) {
+		return;
+	}
+
+	if (object->thread() == QThread::currentThread()) {
+		delete object;
+		return;
+	}
+
+	QMetaObject::invokeMethod(object, [object]() { delete object; }, Qt::BlockingQueuedConnection);
+}
+
+void PluginSource::copySettingToClipboard(const char *key) const {
+	obs_data_t *settings = obs_source_get_settings(m_source);
+	QGuiApplication::clipboard()->setText(QString::fromUtf8(obs_data_get_string(settings, key)));
+	obs_data_release(settings);
+}
+
+bool PluginSource::onCopyStreamIdClicked(obs_properties_t *, obs_property_t *, void *data) {
+	static_cast<PluginSource *>(data)->copySettingToClipboard("StreamId");
+	return false;
+}
+
+bool PluginSource::onCopyStreamUrlClicked(obs_properties_t *, obs_property_t *, void *data) {
+	static_cast<PluginSource *>(data)->copySettingToClipboard("StreamUrl");
+	return false;
+}
+
+void PluginSource::attachLarixQr(const QString &link) {
+	QLabel *streamUrlLabel = nullptr;
+	for (QWidget *top : QApplication::topLevelWidgets()) {
+		for (QLabel *label : top->findChildren<QLabel *>()) {
+			if (label->objectName() == QLatin1String(c_larixQrName)) {
+				continue;
+			}
+			if (label->text() == QStringLiteral("Stream URL")) {
+				streamUrlLabel = label;
+				break;
+			}
+		}
+		if (streamUrlLabel) {
+			break;
+		}
+	}
+	if (!streamUrlLabel) {
+		return;
+	}
+
+	QWidget *container = streamUrlLabel->parentWidget();
+	auto *layout = container ? qobject_cast<QFormLayout *>(container->layout()) : nullptr;
+	if (!layout) {
+		return;
+	}
+
+	int streamUrlRow = -1;
+	for (int row = 0; row < layout->rowCount(); ++row) {
+		QLayoutItem *item = layout->itemAt(row, QFormLayout::LabelRole);
+		if (item && item->widget() == streamUrlLabel) {
+			streamUrlRow = row;
+			break;
+		}
+	}
+	if (streamUrlRow < 0) {
+		return;
+	}
+
+	auto *preview = container->findChild<QLabel *>(QLatin1String(c_larixQrName), Qt::FindDirectChildrenOnly);
+	if (!preview) {
+		preview = new QLabel(container);
+		preview->setObjectName(QLatin1String(c_larixQrName));
+		preview->setAlignment(Qt::AlignCenter);
+		preview->setMinimumSize(c_larixQrSide, c_larixQrSide);
+		const int insertAt = std::min(streamUrlRow + 2, layout->rowCount());
+		layout->insertRow(insertAt, new QLabel(QStringLiteral("QR Code"), container), preview);
+	}
+
+	if (link.isEmpty()) {
+		preview->setPixmap(QPixmap());
+		preview->setText(QStringLiteral("No link yet"));
+		return;
+	}
+
+	const QPixmap qr = obs_helpers::getQrFromURL(link, qrcodegen::QrCode::Ecc::LOW);
+	if (qr.isNull()) {
+		preview->setPixmap(QPixmap());
+		preview->setText(QStringLiteral("Could not create QR code"));
+		return;
+	}
+
+	const int modules = std::max(1, qr.width());
+	const int factor = std::max(1, c_larixQrSide / modules);
+	preview->setText(QString());
+	preview->setPixmap(qr.scaled(modules * factor, modules * factor, Qt::KeepAspectRatio, Qt::FastTransformation));
+}
+
+void PluginSource::scheduleLarixQr() const {
+	const QString link = larixLink();
+	QTimer::singleShot(0, QCoreApplication::instance(), [link]() { PluginSource::attachLarixQr(link); });
+}
+
 void PluginSource::startReceiver() {
 	if (m_running) {
 		return;
 	}
 
-	const auto [port, protocol] = forwardingConfigFor(m_protocol);
-	m_portForwarder = new PortForwarder(port, protocol);
-
-	if (m_protocol == StreamProtocol::WebRTC) {
-		m_secondaryPortForwarder = new PortForwarder(WEBRTC_ICE_PORT, PortForwarder::Protocol::UDP);
+	const std::vector<ForwardingConfig> configs = forwardingConfigs();
+	m_portForwarders.reserve(configs.size());
+	for (const ForwardingConfig &config : configs) {
+		m_portForwarders.push_back(new PortForwarder(config.port, config.protocol));
 	}
 
-	m_pendingPortForwards = m_secondaryPortForwarder ? 2 : 1;
+	m_pendingPortForwards = static_cast<uint8_t>(m_portForwarders.size());
 	m_running = true;
 
-	QObject::connect(m_portForwarder, &PortForwarder::onPortForwardFinished, m_portForwarder,
-			 [this, portForwarder = m_portForwarder](const bool success) {
-				 onPortForwardFinished(portForwarder, success);
-			 });
-
-	m_portForwarder->moveToThread(QCoreApplication::instance()->thread());
-	PortForwarder *portForwarder = m_portForwarder;
-	QMetaObject::invokeMethod(portForwarder, [portForwarder]() { portForwarder->forward(); }, Qt::QueuedConnection);
-
-	if (m_secondaryPortForwarder) {
-		QObject::connect(m_secondaryPortForwarder, &PortForwarder::onPortForwardFinished,
-				 m_secondaryPortForwarder,
-				 [this, portForwarder = m_secondaryPortForwarder](const bool success) {
+	for (PortForwarder *portForwarder : m_portForwarders) {
+		QObject::connect(portForwarder, &PortForwarder::onPortForwardFinished, portForwarder,
+				 [this, portForwarder](const bool success) {
 					 onPortForwardFinished(portForwarder, success);
 				 });
 
-		m_secondaryPortForwarder->moveToThread(QCoreApplication::instance()->thread());
-		PortForwarder *secondaryPortForwarder = m_secondaryPortForwarder;
-		QMetaObject::invokeMethod(
-			secondaryPortForwarder, [secondaryPortForwarder]() { secondaryPortForwarder->forward(); },
-			Qt::QueuedConnection);
+		portForwarder->moveToThread(QCoreApplication::instance()->thread());
+		QMetaObject::invokeMethod(portForwarder, [portForwarder]() { portForwarder->forward(); },
+					  Qt::QueuedConnection);
 	}
 }
 
 void PluginSource::onPortForwardFinished(const PortForwarder *portForwarder, const bool success) {
-	if (!m_running || (portForwarder != m_portForwarder && portForwarder != m_secondaryPortForwarder)) {
+	if (!m_running ||
+	    std::find(m_portForwarders.begin(), m_portForwarders.end(), portForwarder) == m_portForwarders.end()) {
 		return;
 	}
 	if (!success || m_pendingPortForwards == 0) {
@@ -378,7 +353,7 @@ void PluginSource::onPortForwardFinished(const PortForwarder *portForwarder, con
 }
 
 void PluginSource::startStreamHandler() {
-	const std::optional<std::string> publicAddressOpt = m_portForwarder->publicAddress();
+	const std::optional<std::string> publicAddressOpt = m_portForwarders.front()->publicAddress();
 	if (!publicAddressOpt.has_value()) {
 		stopReceiver();
 		return;
@@ -400,7 +375,7 @@ void PluginSource::startStreamHandler() {
 			 [this](const QString &streamId) { onStreamStopped(streamId); });
 	QObject::connect(m_streamHandler, &StreamHandler::streamError, m_streamHandler,
 			 [this](const QString &streamId, const QString &error) { onStreamError(streamId, error); });
-	m_streamHandler->start(m_streamId, m_protocol, publicAddressOpt.value(), m_portForwarder->port());
+	m_streamHandler->start(m_streamId, m_protocol, publicAddressOpt.value(), m_portForwarders.front()->port());
 }
 
 void PluginSource::onStreamReady(const QString &streamId, const QString &publishUrl) {
@@ -442,7 +417,7 @@ QString PluginSource::larixLink() const {
 
 	const char *sourceName = obs_source_get_name(m_source);
 	return obs_helpers::makeLarixLink(QString::fromUtf8(sourceName ? sourceName : ""), url,
-					  obs_helpers::fromStdString(m_streamId), LARIX_SRT_LATENCY_MS);
+					  obs_helpers::fromStdString(m_streamId), c_larixSrtLatencyMs);
 }
 
 void PluginSource::updateProperties() const {
@@ -469,7 +444,7 @@ void PluginSource::startFrameReceiver() {
 	} else {
 		const std::string mediaPath = m_protocol == StreamProtocol::RTMP ? std::format("app/{}", m_streamId)
 										 : m_streamId;
-		m_frameReceiver = new SRT_FrameReceiver(SRT_PORT, std::format("read:{}", mediaPath), m_selectedCodecs);
+		m_frameReceiver = new SRT_FrameReceiver(c_srtPort, std::format("read:{}", mediaPath), m_selectedCodecs);
 	}
 
 	m_frameReceiver->connectReceiver(
@@ -488,12 +463,9 @@ void PluginSource::stopFrameReceiver() {
 }
 
 void PluginSource::destroyPortForwarder() {
-	PortForwarder *portForwarder = m_portForwarder;
-	PortForwarder *secondaryPortForwarder = m_secondaryPortForwarder;
-	m_portForwarder = nullptr;
-	m_secondaryPortForwarder = nullptr;
+	const std::vector<PortForwarder *> portForwarders = std::move(m_portForwarders);
 	m_pendingPortForwards = 0;
-	for (PortForwarder *forwarder : {portForwarder, secondaryPortForwarder}) {
+	for (PortForwarder *forwarder : portForwarders) {
 		if (forwarder) {
 			(void)forwarder->disconnect();
 			deleteOnOwningThread(forwarder);
@@ -568,17 +540,18 @@ obs_properties_t *PluginSource::OnGetProperties(void *data) {
 	obs_property_t *streamId = obs_properties_add_text(props, "StreamId", "Stream ID", OBS_TEXT_DEFAULT);
 	obs_property_set_enabled(streamId, false);
 
-	obs_properties_add_button2(props, "CopyStreamId", "Copy", onCopyStreamIdClicked, source);
+	obs_properties_add_button2(props, "CopyStreamId", "Copy", &PluginSource::onCopyStreamIdClicked, source);
 
 	obs_property_t *streamUrl = obs_properties_add_text(props, "StreamUrl", "Stream URL", OBS_TEXT_DEFAULT);
 	obs_property_set_enabled(streamUrl, false);
-	obs_properties_add_button2(props, "CopyStreamUrl", "Copy", onCopyStreamUrlClicked, source);
+	obs_properties_add_button2(props, "CopyStreamUrl", "Copy", &PluginSource::onCopyStreamUrlClicked, source);
 
-	scheduleLarixQr(source->larixLink());
+	source->scheduleLarixQr();
 
 	obs_property_list_add_string(protocolList, "SRTLA", "SRTLA");
 	obs_property_list_add_string(protocolList, "SRT", "SRT");
 	obs_property_list_add_string(protocolList, "WebRTC", "WebRTC");
+	obs_property_list_add_string(protocolList, "MoQ", "MoQ");
 	obs_property_list_add_string(protocolList, "RTSP", "RTSP");
 	obs_property_list_add_string(protocolList, "RTMP", "RTMP");
 

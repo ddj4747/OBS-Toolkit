@@ -205,6 +205,9 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Strea
 	case StreamProtocol::WebRTC:
 		publishUrl = QString("http://%1:8889/%2/whip").arg(ipStr).arg(mediaPath);
 		break;
+	case StreamProtocol::MoQ:
+		publishUrl = QString("https://%1:8892/%2/publish").arg(ipStr).arg(mediaPath);
+		break;
 	default:
 		emit inputError(qname, QStringLiteral("Unsupported protocol"));
 		return;

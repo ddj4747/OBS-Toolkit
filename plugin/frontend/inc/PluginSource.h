@@ -13,10 +13,13 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <vector>
 
 #ifndef NO_DISCARD
 #define NO_DISCARD [[nodiscard]]
 #endif
+
+class QObject;
 
 class PluginSource {
 public:
@@ -73,6 +76,31 @@ private:
 	void updateProperties() const;
 	NO_DISCARD QString larixLink() const;
 
+	struct ForwardingConfig {
+		uint16_t port;
+		PortForwarder::Protocol protocol;
+	};
+
+	static constexpr uint16_t c_srtPort = 8890;
+	static constexpr uint16_t c_srtlaPort = 5000;
+	static constexpr uint16_t c_rtmpPort = 1935;
+	static constexpr uint16_t c_rtspPort = 8554;
+	static constexpr uint16_t c_webrtcHttpPort = 8889;
+	static constexpr uint16_t c_webrtcIcePort = 8189;
+	static constexpr uint16_t c_moqHttpPort = 8892;
+	static constexpr uint16_t c_moqQuicPort = 8893;
+	static constexpr int c_larixSrtLatencyMs = 2000;
+	static constexpr const char *c_larixQrName = "pluginSourceLarixQr";
+	static constexpr int c_larixQrSide = 360;
+
+	NO_DISCARD std::vector<ForwardingConfig> forwardingConfigs() const;
+	static void deleteOnOwningThread(QObject *object);
+	void copySettingToClipboard(const char *key) const;
+	static bool onCopyStreamIdClicked(obs_properties_t *props, obs_property_t *property, void *data);
+	static bool onCopyStreamUrlClicked(obs_properties_t *props, obs_property_t *property, void *data);
+	static void attachLarixQr(const QString &link);
+	void scheduleLarixQr() const;
+
 	obs_source_t *m_source = nullptr;
 	uint32_t m_width{1280};
 	uint32_t m_height{720};
@@ -82,8 +110,7 @@ private:
 	std::string m_streamUrl;
 	StreamProtocol m_protocol{};
 
-	PortForwarder *m_portForwarder{nullptr};
-	PortForwarder *m_secondaryPortForwarder{nullptr};
+	std::vector<PortForwarder *> m_portForwarders;
 	SRT_FrameReceiver *m_frameReceiver{nullptr};
 	mutable std::mutex m_frameReceiverMutex;
 	StreamHandler *m_streamHandler{nullptr};
