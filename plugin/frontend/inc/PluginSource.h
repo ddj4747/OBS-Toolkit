@@ -71,6 +71,7 @@ private:
 	void onStreamStopped(const QString &streamId);
 	void onStreamError(const QString &streamId, const QString &error);
 	void updateProperties() const;
+	NO_DISCARD QString larixLink() const;
 
 	obs_source_t *m_source = nullptr;
 	uint32_t m_width{1280};

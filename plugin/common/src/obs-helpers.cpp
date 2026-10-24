@@ -10,8 +10,18 @@
 #include <ranges>
 
 #include <plugin-support.h>
+#include <QUrl>
 
 namespace obs_helpers {
+
+QString makeLarixLink(const QString &name, const QString &url, const QString &streamId, const int latencyMs) {
+	const QString encodedName = QUrl::toPercentEncoding(name);
+	const QString encodedStreamId = QUrl::toPercentEncoding(streamId);
+	const QString larixTemplate =
+		"larix://set/v1?conn[][name]=%1&conn[][url]=%2/&conn[][srtstreamid]=%3&conn[][srtlatency]=%4";
+
+	return larixTemplate.arg(encodedName).arg(url).arg(encodedStreamId).arg(latencyMs);
+}
 
 QPixmap getQrFromURL(const QString &url, qrcodegen::QrCode::Ecc errCorrection) {
 	const QByteArray utf8 = url.toUtf8();

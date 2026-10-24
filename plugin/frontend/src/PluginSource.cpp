@@ -5,15 +5,23 @@
 #include "PluginFrontend.h"
 
 #include <GoIRLStreamHandler.h>
+#include <GoIRL_Process.h>
 #include <MediamtxStreamHandler.h>
 #include <obs-helpers.h>
 
+#include <QApplication>
 #include <QByteArray>
 #include <QClipboard>
 #include <QCoreApplication>
+#include <QFormLayout>
 #include <QGuiApplication>
+#include <QLabel>
+#include <QPixmap>
 #include <QThread>
+#include <QTimer>
+#include <QUrl>
 #include <magic_enum/magic_enum.hpp>
+#include <algorithm>
 #include <format>
 #include <QUuid>
 
@@ -24,6 +32,7 @@ constexpr uint16_t RTMP_PORT = 1935;
 constexpr uint16_t RTSP_PORT = 8554;
 constexpr uint16_t WEBRTC_HTTP_PORT = 8889;
 constexpr uint16_t WEBRTC_ICE_PORT = 8189;
+constexpr int LARIX_SRT_LATENCY_MS = 2000;
 
 struct ForwardingConfig {
 	uint16_t port;
@@ -74,6 +83,80 @@ bool onCopyStreamIdClicked(obs_properties_t *, obs_property_t *, void *data) {
 bool onCopyStreamUrlClicked(obs_properties_t *, obs_property_t *, void *data) {
 	copySettingToClipboard(static_cast<PluginSource *>(data), "StreamUrl");
 	return false;
+}
+
+constexpr const char *LARIX_QR_NAME = "pluginSourceLarixQr";
+constexpr int LARIX_QR_SIDE = 360;
+
+void attachLarixQr(const QString &link) {
+	QLabel *streamUrlLabel = nullptr;
+	for (QWidget *top : QApplication::topLevelWidgets()) {
+		for (QLabel *label : top->findChildren<QLabel *>()) {
+			if (label->objectName() == QLatin1String(LARIX_QR_NAME)) {
+				continue;
+			}
+			if (label->text() == QStringLiteral("Stream URL")) {
+				streamUrlLabel = label;
+				break;
+			}
+		}
+		if (streamUrlLabel) {
+			break;
+		}
+	}
+	if (!streamUrlLabel) {
+		return;
+	}
+
+	QWidget *container = streamUrlLabel->parentWidget();
+	auto *layout = container ? qobject_cast<QFormLayout *>(container->layout()) : nullptr;
+	if (!layout) {
+		return;
+	}
+
+	int streamUrlRow = -1;
+	for (int row = 0; row < layout->rowCount(); ++row) {
+		QLayoutItem *item = layout->itemAt(row, QFormLayout::LabelRole);
+		if (item && item->widget() == streamUrlLabel) {
+			streamUrlRow = row;
+			break;
+		}
+	}
+	if (streamUrlRow < 0) {
+		return;
+	}
+
+	auto *preview = container->findChild<QLabel *>(QLatin1String(LARIX_QR_NAME), Qt::FindDirectChildrenOnly);
+	if (!preview) {
+		preview = new QLabel(container);
+		preview->setObjectName(QLatin1String(LARIX_QR_NAME));
+		preview->setAlignment(Qt::AlignCenter);
+		preview->setMinimumSize(LARIX_QR_SIDE, LARIX_QR_SIDE);
+		const int insertAt = std::min(streamUrlRow + 2, layout->rowCount());
+		layout->insertRow(insertAt, new QLabel(QStringLiteral("QR Code"), container), preview);
+	}
+
+	if (link.isEmpty()) {
+		preview->setPixmap(QPixmap());
+		preview->setText(QStringLiteral("No link yet"));
+		return;
+	}
+
+	const QPixmap qr = obs_helpers::getQrFromURL(link, qrcodegen::QrCode::Ecc::LOW);
+	if (qr.isNull()) {
+		preview->setPixmap(QPixmap());
+		preview->setText(QStringLiteral("Could not create QR code"));
+		return;
+	}
+
+	const int modules = std::max(1, qr.width());
+	const int factor = std::max(1, LARIX_QR_SIDE / modules);
+	preview->setText(QString());
+	preview->setPixmap(qr.scaled(modules * factor, modules * factor, Qt::KeepAspectRatio, Qt::FastTransformation));
+}
+
+void scheduleLarixQr(const QString &link) {
+	QTimer::singleShot(0, QCoreApplication::instance(), [link]() { attachLarixQr(link); });
 }
 } // namespace
 
@@ -349,6 +432,19 @@ void PluginSource::onStreamError(const QString &streamId, const QString &error) 
 	obs_log(LOG_ERROR, "stream handler error for '%s': %s", qUtf8Printable(streamId), qUtf8Printable(error));
 }
 
+QString PluginSource::larixLink() const {
+	QString url{};
+	if (m_protocol == StreamProtocol::SRT) {
+		url = obs_helpers::fromStdString(m_streamUrl.substr(0, m_streamUrl.find_last_of('?')));
+	} else {
+		url = obs_helpers::fromStdString(m_streamUrl);
+	}
+
+	const char *sourceName = obs_source_get_name(m_source);
+	return obs_helpers::makeLarixLink(QString::fromUtf8(sourceName ? sourceName : ""), url,
+					  obs_helpers::fromStdString(m_streamId), LARIX_SRT_LATENCY_MS);
+}
+
 void PluginSource::updateProperties() const {
 	obs_data_t *settings = obs_source_get_settings(m_source);
 	obs_data_set_string(settings, "StreamUrl", m_streamUrl.c_str());
@@ -368,7 +464,8 @@ void PluginSource::startFrameReceiver() {
 
 	if (m_protocol == StreamProtocol::SRTLA) {
 		m_frameReceiver =
-			new SRT_FrameReceiver(SRT_PORT, std::format("{}-client", m_streamId), m_selectedCodecs);
+			new SRT_FrameReceiver(GoIRL_Process::c_localSrtPort, std::format("{}-client", m_streamId),
+					      m_selectedCodecs);
 	} else {
 		const std::string mediaPath = m_protocol == StreamProtocol::RTMP ? std::format("app/{}", m_streamId)
 										 : m_streamId;
@@ -476,6 +573,8 @@ obs_properties_t *PluginSource::OnGetProperties(void *data) {
 	obs_property_t *streamUrl = obs_properties_add_text(props, "StreamUrl", "Stream URL", OBS_TEXT_DEFAULT);
 	obs_property_set_enabled(streamUrl, false);
 	obs_properties_add_button2(props, "CopyStreamUrl", "Copy", onCopyStreamUrlClicked, source);
+
+	scheduleLarixQr(source->larixLink());
 
 	obs_property_list_add_string(protocolList, "SRTLA", "SRTLA");
 	obs_property_list_add_string(protocolList, "SRT", "SRT");

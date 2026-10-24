@@ -18,6 +18,8 @@ public:
 	GoIRL_Process(const GoIRL_Process &) = delete;
 	GoIRL_Process &operator=(const GoIRL_Process &) = delete;
 
+	static constexpr uint16_t c_localSrtPort = 5001;
+
 	explicit GoIRL_Process(uint16_t port);
 	~GoIRL_Process() override;
 

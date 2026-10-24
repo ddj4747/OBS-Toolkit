@@ -19,6 +19,7 @@ QIcon getIconFromPath(const QString &path);
 NO_DISCARD uint64_t connectSourceEditSignals(std::function<void(calldata_t *cd)> callback);
 void disconnectSourceEditSignals(uint64_t id);
 QPixmap getQrFromURL(const QString &url, qrcodegen::QrCode::Ecc errCorrection);
+QString makeLarixLink(const QString &name, const QString &url, const QString &streamId, int latencyMs);
 
 inline QString fromStdString(const std::string &str) {
 	return QString::fromUtf8(str.data(), static_cast<qsizetype>(str.size()));
