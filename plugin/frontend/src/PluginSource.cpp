@@ -203,7 +203,8 @@ std::vector<PluginSource::ForwardingConfig> PluginSource::forwardingConfigs() co
 			{c_rtspRtpPort, PortForwarder::Protocol::UDP},
 			{c_rtspRtcpPort, PortForwarder::Protocol::UDP}};
 	case StreamProtocol::WebRTC:
-		return {{c_webrtcHttpPort, PortForwarder::Protocol::TCP}, {c_webrtcIcePort, PortForwarder::Protocol::UDP}};
+		return {{c_webrtcHttpPort, PortForwarder::Protocol::TCP},
+			{c_webrtcIcePort, PortForwarder::Protocol::UDP}};
 	case StreamProtocol::MoQ:
 		return {{c_moqHttpPort, PortForwarder::Protocol::TCP},
 			{c_moqHttpPort, PortForwarder::Protocol::UDP},
@@ -335,8 +336,8 @@ void PluginSource::startReceiver() {
 				 });
 
 		portForwarder->moveToThread(QCoreApplication::instance()->thread());
-		QMetaObject::invokeMethod(portForwarder, [portForwarder]() { portForwarder->forward(); },
-					  Qt::QueuedConnection);
+		QMetaObject::invokeMethod(
+			portForwarder, [portForwarder]() { portForwarder->forward(); }, Qt::QueuedConnection);
 	}
 }
 
@@ -440,9 +441,8 @@ void PluginSource::startFrameReceiver() {
 	}
 
 	if (m_protocol == StreamProtocol::SRTLA) {
-		m_frameReceiver =
-			new SRT_FrameReceiver(GoIRL_Process::c_localSrtPort, std::format("{}-client", m_streamId),
-					      m_selectedCodecs);
+		m_frameReceiver = new SRT_FrameReceiver(GoIRL_Process::c_localSrtPort,
+							std::format("{}-client", m_streamId), m_selectedCodecs);
 	} else {
 		const std::string mediaPath = m_protocol == StreamProtocol::RTMP ? std::format("app/{}", m_streamId)
 										 : m_streamId;

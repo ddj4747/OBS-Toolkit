@@ -39,8 +39,7 @@ HANDLE killOnCloseJob() {
 			const bool canBreakAway = (flags & JOB_OBJECT_LIMIT_BREAKAWAY_OK) != 0 ||
 						  (flags & JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK) != 0;
 			if (!canBreakAway) {
-				obs_log(LOG_INFO,
-					"OBS is in a job that disallows breakaway; skip kill-on-close job");
+				obs_log(LOG_INFO, "OBS is in a job that disallows breakaway; skip kill-on-close job");
 				return nullptr;
 			}
 		}
@@ -90,8 +89,8 @@ void attachToKillOnCloseJob(QProcess *process) {
 			return;
 		}
 
-		const HANDLE child =
-			OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, static_cast<DWORD>(process->processId()));
+		const HANDLE child = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE,
+						 static_cast<DWORD>(process->processId()));
 		if (child == nullptr) {
 			obs_log(LOG_ERROR, "OpenProcess failed (%lu)", GetLastError());
 			return;

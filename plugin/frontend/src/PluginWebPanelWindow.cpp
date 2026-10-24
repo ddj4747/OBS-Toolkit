@@ -130,8 +130,8 @@ void PluginWebPanelWindow::applyEnabled() const {
 void PluginWebPanelWindow::applyNewUrl() const {
 	const QString ip = API_Endpoint::getInstance().getIp();
 	const QString port = QString::number(API_Endpoint::getInstance().getPort());
-	m_accessKeyEdit->setText(QStringLiteral("https://place-holder.com?accessKey=%1,ip=%2,port=%3")
-					 .arg(m_accessKey, ip, port));
+	m_accessKeyEdit->setText(
+		QStringLiteral("https://place-holder.com?accessKey=%1,ip=%2,port=%3").arg(m_accessKey, ip, port));
 }
 
 void PluginWebPanelWindow::refreshQrCode() {
@@ -156,8 +156,8 @@ void PluginWebPanelWindow::updateImagePreview() {
 	const int side = std::min(target.width(), target.height());
 	const int factor = std::max(1, side / std::max(1, modules));
 	m_qrLabel->setText(QString());
-	m_qrLabel->setPixmap(m_qrCode.scaled(modules * factor, modules * factor, Qt::KeepAspectRatio,
-					     Qt::FastTransformation));
+	m_qrLabel->setPixmap(
+		m_qrCode.scaled(modules * factor, modules * factor, Qt::KeepAspectRatio, Qt::FastTransformation));
 
 	m_updatingImagePreview = false;
 }
