@@ -366,7 +366,7 @@ def run_conan_install(build_type: str, arch: str | None = None, output_folder: s
 
     if current_platform == "win32":
         runtime_type = "Debug" if build_type == "Debug" else "Release"
-        cmd_parts.append("-s compiler.runtime=static")
+        cmd_parts.append("-s compiler.runtime=dynamic")
         cmd_parts.append(f"-s compiler.runtime_type={runtime_type}")
 
     if extra_flags:
@@ -402,7 +402,8 @@ def conan_package_folder(generators_dir: Path, package_name: str, required: bool
     return None
 
 
-def lipo_static_libraries(package_name: str, arm_package: Path, x86_package: Path, universal_lib_dir: Path) -> list[str]:
+def lipo_static_libraries(package_name: str, arm_package: Path, x86_package: Path, universal_lib_dir: Path) -> list[
+    str]:
     arm_lib_dir = arm_package / "lib"
     x86_lib_dir = x86_package / "lib"
     arm_libs = sorted(path for path in arm_lib_dir.glob("*.a") if path.is_file())

@@ -4,6 +4,8 @@ include_guard(GLOBAL)
 
 include(compiler_common)
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT ProgramDatabase)
 
 message(DEBUG "Current Windows API version: ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
