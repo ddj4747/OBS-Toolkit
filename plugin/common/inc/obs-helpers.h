@@ -5,7 +5,7 @@
 #include <callback/calldata.h>
 #include <functional>
 #include <string>
-#include <qrcodegencpp/qrcodegen.hpp>
+#include <qrcodegen/qrcodegen.hpp>
 
 struct obs_source;
 

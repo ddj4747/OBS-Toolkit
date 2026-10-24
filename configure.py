@@ -366,7 +366,7 @@ def run_conan_install(build_type: str, arch: str | None = None, output_folder: s
 
     if current_platform == "win32":
         runtime_type = "Debug" if build_type == "Debug" else "Release"
-        cmd_parts.append("-s compiler.runtime=dynamic")
+        cmd_parts.append("-s compiler.runtime=static")
         cmd_parts.append(f"-s compiler.runtime_type={runtime_type}")
 
     if extra_flags:
@@ -460,6 +460,10 @@ def create_macos_universal_libraries():
     if arm_zlib:
         x86_zlib = conan_package_folder(x86_generators, "zlib")
         lipo_static_libraries("zlib", arm_zlib, x86_zlib, universal_lib_dir)
+
+    arm_qr = conan_package_folder(arm_generators, "qr-code-generator")
+    x86_qr = conan_package_folder(x86_generators, "qr-code-generator")
+    lipo_static_libraries("qr-code-generator", arm_qr, x86_qr, universal_lib_dir)
 
 
 shutil.rmtree("build", ignore_errors=True)

@@ -49,13 +49,13 @@ def require_clang_format():
 def require_gersemi():
 	executable = shutil.which("gersemi")
 	if not executable:
-		sys.exit("gersemi 0.12.0 or newer was not found")
+		sys.exit("gersemi 0.21.x was not found")
 
 	output = subprocess.check_output([executable, "--version"], text=True)
 	version = version_of(output)
-	if version is None or version < (0, 12, 0):
+	if version is None or version < (0, 21, 0) or version >= (0, 22, 0):
 		found = ".".join(map(str, version)) if version else output.strip()
-		sys.exit(f"gersemi 0.12.0 or newer is required (found {found})")
+		sys.exit(f"gersemi 0.21.x is required (found {found})")
 	return executable
 
 
