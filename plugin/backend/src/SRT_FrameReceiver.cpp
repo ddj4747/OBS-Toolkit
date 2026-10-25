@@ -354,17 +354,28 @@ bool SRT_FrameReceiver::active() {
 }
 
 uint32_t SRT_FrameReceiver::getBitrate() {
-	const uint64_t byteCount = m_bitCount.exchange(0);
-	const uint64_t currentTime = os_gettime_ns();
-	const uint64_t lastTime = m_bitrateLastCheck.exchange(currentTime);
-	const uint64_t elapsedNs = currentTime - lastTime;
-
-	if (elapsedNs == 0) {
-		m_bitCount.fetch_add(byteCount);
-		return 0;
+	constexpr uint64_t sampleWindowNs = 500000000ULL;
+	const uint64_t now = os_gettime_ns();
+	const uint64_t last = m_bitrateLastCheck.load();
+	if (last != 0 && now - last < sampleWindowNs) {
+		return m_lastBitrate.load();
 	}
 
-	return static_cast<uint32_t>((byteCount * 8 * 1000000000ULL) / elapsedNs);
+	uint64_t expected = last;
+	if (!m_bitrateLastCheck.compare_exchange_strong(expected, now)) {
+		return m_lastBitrate.load();
+	}
+
+	const uint64_t byteCount = m_bitCount.exchange(0);
+	const uint64_t elapsedNs = now - last;
+	if (elapsedNs == 0) {
+		m_bitCount.fetch_add(byteCount);
+		return m_lastBitrate.load();
+	}
+
+	const uint32_t bitrate = static_cast<uint32_t>((byteCount * 8 * 1000000000ULL) / elapsedNs);
+	m_lastBitrate.store(bitrate);
+	return bitrate;
 }
 
 void SRT_FrameReceiver::startReceiver() {
@@ -412,6 +423,7 @@ void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
 	}
 
 	m_bitCount.store(0);
+	m_lastBitrate.store(0);
 	m_bitrateLastCheck.store(os_gettime_ns());
 
 	while (!token.stop_requested()) {

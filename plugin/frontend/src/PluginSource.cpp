@@ -138,6 +138,34 @@ bool PluginSource::active() const {
 	return m_frameReceiver->active();
 }
 
+std::vector<std::string> PluginSource::sourceNames() {
+	std::lock_guard<std::mutex> lock(s_instancesMutex);
+	std::vector<std::string> names;
+	names.reserve(s_instances.size());
+
+	for (const PluginSource *source : s_instances) {
+		const char *name = obs_source_get_name(source->m_source);
+		if (name && *name) {
+			names.emplace_back(name);
+		}
+	}
+
+	std::sort(names.begin(), names.end());
+	return names;
+}
+
+std::optional<uint64_t> PluginSource::bitrateForName(const std::string &name) {
+	std::lock_guard<std::mutex> lock(s_instancesMutex);
+	for (PluginSource *source : s_instances) {
+		const char *sourceName = obs_source_get_name(source->m_source);
+		if (sourceName && name == sourceName) {
+			return source->getBitrate();
+		}
+	}
+
+	return std::nullopt;
+}
+
 uint32_t PluginSource::width() const {
 	return m_width;
 }

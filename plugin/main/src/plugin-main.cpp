@@ -24,6 +24,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <EventManager.h>
 #include <PluginFrontend.h>
 #include <PluginSource.h>
+#include <PluginInfoSource.h>
 #include <API_Endpoint.h>
 
 OBS_DECLARE_MODULE()
@@ -64,6 +65,7 @@ void on_frontend_event(const obs_frontend_event event, void *) {
 
 bool obs_module_load(void) {
 	PluginSource::registerType();
+	PluginInfoSource::registerType();
 
 	if (!API_Endpoint::getInstance().start()) {
 		return false;

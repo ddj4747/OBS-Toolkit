@@ -11,6 +11,7 @@
 #include <atomic>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -29,6 +30,8 @@ public:
 	static const char *id();
 	static void prepareForShutdown();
 	static std::vector<std::pair<std::string, uint64_t>> getBitrates();
+	static std::vector<std::string> sourceNames();
+	static std::optional<uint64_t> bitrateForName(const std::string &name);
 
 	NO_DISCARD obs_source_t *getSource() const;
 	NO_DISCARD uint64_t getBitrate() const;
