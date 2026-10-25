@@ -14,10 +14,12 @@
 
 namespace obs_helpers {
 
-QString makeLarixLink(const QString &name, const QString &url, const QString &streamId, const int latencyMs) {
+QString makeLarixLink(const QString &name, const QString &url, const QString &streamId, const int latencyMs,
+		      const QString &scheme) {
 	const QString encodedName = QUrl::toPercentEncoding(name);
 	const QString encodedUrl = QUrl::toPercentEncoding(url);
-	QString link = QStringLiteral("larix://set/v1?conn[][name]=%1&conn[][url]=%2").arg(encodedName, encodedUrl);
+	QString link =
+		QStringLiteral("%1://set/v1?conn[][name]=%2&conn[][url]=%3").arg(scheme, encodedName, encodedUrl);
 
 	if (!streamId.isEmpty()) {
 		const QString encodedStreamId = QUrl::toPercentEncoding(streamId);

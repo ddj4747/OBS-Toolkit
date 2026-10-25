@@ -75,6 +75,9 @@ private:
 	void onStreamError(const QString &streamId, const QString &error);
 	void updateProperties() const;
 	NO_DISCARD QString larixLink() const;
+	NO_DISCARD QString irlProLink() const;
+	NO_DISCARD QString moblinLink() const;
+	NO_DISCARD QString connectionLink(const QString &scheme) const;
 
 	struct ForwardingConfig {
 		uint16_t port;
@@ -92,16 +95,15 @@ private:
 	static constexpr uint16_t c_moqHttpPort = 8892;
 	static constexpr uint16_t c_moqQuicPort = 8893;
 	static constexpr int c_larixSrtLatencyMs = 2000;
-	static constexpr const char *c_larixQrName = "pluginSourceLarixQr";
-	static constexpr int c_larixQrSide = 360;
+	static constexpr const char *c_qrNamePrefix = "pluginSourceQr";
 
 	NO_DISCARD std::vector<ForwardingConfig> forwardingConfigs() const;
 	static void deleteOnOwningThread(QObject *object);
 	void copySettingToClipboard(const char *key) const;
 	static bool onCopyStreamIdClicked(obs_properties_t *props, obs_property_t *property, void *data);
 	static bool onCopyStreamUrlClicked(obs_properties_t *props, obs_property_t *property, void *data);
-	static void attachLarixQr(const QString &link);
-	void scheduleLarixQr() const;
+	static void attachAppQrCodes(const QString &larixLink, const QString &moblinLink, const QString &irlProLink);
+	void scheduleAppQrCodes() const;
 
 	obs_source_t *m_source = nullptr;
 	uint32_t m_width{1280};

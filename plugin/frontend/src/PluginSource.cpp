@@ -15,8 +15,16 @@
 #include <QCoreApplication>
 #include <QFormLayout>
 #include <QGuiApplication>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QPixmap>
+#include <QResizeEvent>
+#include <QShowEvent>
+#include <QSizePolicy>
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
@@ -244,11 +252,120 @@ bool PluginSource::onCopyStreamUrlClicked(obs_properties_t *, obs_property_t *, 
 	return false;
 }
 
-void PluginSource::attachLarixQr(const QString &link) {
+class AppQrRow : public QWidget {
+public:
+	explicit AppQrRow(QWidget *parent = nullptr) : QWidget(parent) {
+		setObjectName(QStringLiteral("pluginSourceQrRow"));
+		setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+
+		auto *rowLayout = new QHBoxLayout(this);
+		rowLayout->setContentsMargins(0, 0, 0, 0);
+		rowLayout->setSpacing(16);
+		rowLayout->setSizeConstraint(QLayout::SetNoConstraint);
+
+		const char *titles[] = {"Larix", "Moblin", "IRL Pro"};
+		const char *names[] = {"pluginSourceQrLarix", "pluginSourceQrMoblin", "pluginSourceQrIrlPro"};
+		for (int index = 0; index < 3; ++index) {
+			auto *cell = new QWidget(this);
+			cell->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+			auto *cellLayout = new QVBoxLayout(cell);
+			cellLayout->setContentsMargins(0, 0, 0, 0);
+			cellLayout->setSpacing(6);
+
+			auto *title = new QLabel(QString::fromUtf8(titles[index]), cell);
+			title->setAlignment(Qt::AlignCenter);
+			m_previews[index] = new QLabel(cell);
+			m_previews[index]->setObjectName(QLatin1String(names[index]));
+			m_previews[index]->setAlignment(Qt::AlignCenter);
+			m_previews[index]->setScaledContents(false);
+			m_previews[index]->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+			cellLayout->addWidget(title);
+			cellLayout->addWidget(m_previews[index], 0, Qt::AlignHCenter);
+			rowLayout->addWidget(cell, 1);
+		}
+	}
+
+	void setLinks(const QString &larixLink, const QString &moblinLink, const QString &irlProLink) {
+		m_links[0] = larixLink;
+		m_links[1] = moblinLink;
+		m_links[2] = irlProLink;
+		for (int index = 0; index < 3; ++index) {
+			updatePixmap(index);
+		}
+	}
+
+	QSize minimumSizeHint() const override { return {0, m_side > 0 ? m_side + 28 : 28}; }
+
+	QSize sizeHint() const override { return {3 * 280, m_side > 0 ? m_side + 28 : 28}; }
+
+protected:
+	void resizeEvent(QResizeEvent *event) override {
+		QWidget::resizeEvent(event);
+		applySquareSize();
+	}
+
+	void showEvent(QShowEvent *event) override {
+		QWidget::showEvent(event);
+		applySquareSize();
+	}
+
+private:
+	void applySquareSize() {
+		auto *rowLayout = static_cast<QHBoxLayout *>(layout());
+		const int inner = std::max(0, contentsRect().width() - rowLayout->spacing() * 2);
+		const int side = std::clamp(inner / 3, 1, 280);
+		if (side == m_side) {
+			return;
+		}
+
+		m_side = side;
+		for (int index = 0; index < 3; ++index) {
+			m_previews[index]->setFixedSize(side, side);
+			updatePixmap(index);
+		}
+
+		const int height = side + 28;
+		setMinimumHeight(height);
+		setMaximumHeight(height);
+	}
+
+	void updatePixmap(const int index) {
+		QLabel *preview = m_previews[index];
+		const QString &link = m_links[index];
+		if (m_side <= 0) {
+			return;
+		}
+		if (link.isEmpty()) {
+			preview->setPixmap(QPixmap());
+			preview->setText(QStringLiteral("No link yet"));
+			return;
+		}
+
+		const QPixmap qr = obs_helpers::getQrFromURL(link, qrcodegen::QrCode::Ecc::LOW);
+		if (qr.isNull()) {
+			preview->setPixmap(QPixmap());
+			preview->setText(QStringLiteral("Could not create QR code"));
+			return;
+		}
+
+		const int modules = std::max(1, qr.width());
+		const int factor = std::max(1, m_side / modules);
+		const int pixels = modules * factor;
+		preview->setText(QString());
+		preview->setPixmap(qr.scaled(pixels, pixels, Qt::KeepAspectRatio, Qt::FastTransformation));
+	}
+
+	QLabel *m_previews[3]{};
+	QString m_links[3];
+	int m_side = -1;
+};
+
+void PluginSource::attachAppQrCodes(const QString &larixLink, const QString &moblinLink, const QString &irlProLink) {
+
 	QLabel *streamUrlLabel = nullptr;
 	for (QWidget *top : QApplication::topLevelWidgets()) {
 		for (QLabel *label : top->findChildren<QLabel *>()) {
-			if (label->objectName() == QLatin1String(c_larixQrName)) {
+			if (label->objectName().startsWith(QLatin1String(c_qrNamePrefix))) {
 				continue;
 			}
 			if (label->text() == QStringLiteral("Stream URL")) {
@@ -270,6 +387,24 @@ void PluginSource::attachLarixQr(const QString &link) {
 		return;
 	}
 
+	for (int row = layout->rowCount() - 1; row >= 0; --row) {
+		QLayoutItem *field = layout->itemAt(row, QFormLayout::FieldRole);
+		QLayoutItem *spanning = layout->itemAt(row, QFormLayout::SpanningRole);
+		QWidget *widget = spanning && spanning->widget() ? spanning->widget() : nullptr;
+		if (!widget && field) {
+			widget = field->widget();
+		}
+		if (!widget || dynamic_cast<AppQrRow *>(widget) != nullptr) {
+			continue;
+		}
+
+		const QString name = widget->objectName();
+		const bool stackedQr = name.startsWith(QLatin1String(c_qrNamePrefix));
+		if (name == QLatin1String("pluginSourceLarixQr") || stackedQr) {
+			layout->removeRow(row);
+		}
+	}
+
 	int streamUrlRow = -1;
 	for (int row = 0; row < layout->rowCount(); ++row) {
 		QLayoutItem *item = layout->itemAt(row, QFormLayout::LabelRole);
@@ -282,38 +417,23 @@ void PluginSource::attachLarixQr(const QString &link) {
 		return;
 	}
 
-	auto *preview = container->findChild<QLabel *>(QLatin1String(c_larixQrName), Qt::FindDirectChildrenOnly);
-	if (!preview) {
-		preview = new QLabel(container);
-		preview->setObjectName(QLatin1String(c_larixQrName));
-		preview->setAlignment(Qt::AlignCenter);
-		preview->setMinimumSize(c_larixQrSide, c_larixQrSide);
+	auto *rowWidget = dynamic_cast<AppQrRow *>(
+		container->findChild<QWidget *>(QLatin1String("pluginSourceQrRow"), Qt::FindDirectChildrenOnly));
+	if (!rowWidget) {
+		rowWidget = new AppQrRow(container);
 		const int insertAt = std::min(streamUrlRow + 2, layout->rowCount());
-		layout->insertRow(insertAt, new QLabel(QStringLiteral("QR Code"), container), preview);
+		layout->insertRow(insertAt, rowWidget);
 	}
 
-	if (link.isEmpty()) {
-		preview->setPixmap(QPixmap());
-		preview->setText(QStringLiteral("No link yet"));
-		return;
-	}
-
-	const QPixmap qr = obs_helpers::getQrFromURL(link, qrcodegen::QrCode::Ecc::LOW);
-	if (qr.isNull()) {
-		preview->setPixmap(QPixmap());
-		preview->setText(QStringLiteral("Could not create QR code"));
-		return;
-	}
-
-	const int modules = std::max(1, qr.width());
-	const int factor = std::max(1, c_larixQrSide / modules);
-	preview->setText(QString());
-	preview->setPixmap(qr.scaled(modules * factor, modules * factor, Qt::KeepAspectRatio, Qt::FastTransformation));
+	rowWidget->setLinks(larixLink, moblinLink, irlProLink);
 }
 
-void PluginSource::scheduleLarixQr() const {
-	const QString link = larixLink();
-	QTimer::singleShot(0, QCoreApplication::instance(), [link]() { PluginSource::attachLarixQr(link); });
+void PluginSource::scheduleAppQrCodes() const {
+	const QString larix = larixLink();
+	const QString moblin = moblinLink();
+	const QString irlPro = irlProLink();
+	QTimer::singleShot(0, QCoreApplication::instance(),
+			   [larix, moblin, irlPro]() { PluginSource::attachAppQrCodes(larix, moblin, irlPro); });
 }
 
 void PluginSource::startReceiver() {
@@ -412,6 +532,14 @@ void PluginSource::onStreamError(const QString &streamId, const QString &error) 
 }
 
 QString PluginSource::larixLink() const {
+	return connectionLink(QStringLiteral("larix"));
+}
+
+QString PluginSource::irlProLink() const {
+	return connectionLink(QStringLiteral("irlpro"));
+}
+
+QString PluginSource::connectionLink(const QString &scheme) const {
 	QString url = obs_helpers::fromStdString(m_streamUrl);
 	QString srtStreamId;
 	if (m_protocol == StreamProtocol::SRT) {
@@ -427,7 +555,32 @@ QString PluginSource::larixLink() const {
 
 	const char *sourceName = obs_source_get_name(m_source);
 	return obs_helpers::makeLarixLink(QString::fromUtf8(sourceName ? sourceName : ""), url, srtStreamId,
-					  c_larixSrtLatencyMs);
+					  c_larixSrtLatencyMs, scheme);
+}
+
+QString PluginSource::moblinLink() const {
+	QString url = obs_helpers::fromStdString(m_streamUrl);
+	if (m_protocol == StreamProtocol::SRTLA && !url.isEmpty() && !url.contains(QLatin1Char('?'))) {
+		url += QStringLiteral("?streamid=") + obs_helpers::fromStdString(m_streamId);
+	}
+
+	const char *sourceName = obs_source_get_name(m_source);
+	QJsonObject stream;
+	stream["name"] = QString::fromUtf8(sourceName ? sourceName : "");
+	stream["url"] = url;
+	stream["selected"] = true;
+	if (m_protocol == StreamProtocol::SRT || m_protocol == StreamProtocol::SRTLA) {
+		QJsonObject srt;
+		srt["latency"] = c_larixSrtLatencyMs;
+		stream["srt"] = srt;
+	}
+
+	QJsonArray streams;
+	streams.append(stream);
+	QJsonObject root;
+	root["streams"] = streams;
+	const QByteArray json = QJsonDocument(root).toJson(QJsonDocument::Compact);
+	return QStringLiteral("moblin://?") + QString::fromUtf8(QUrl::toPercentEncoding(QString::fromUtf8(json)));
 }
 
 void PluginSource::updateProperties() const {
@@ -555,7 +708,7 @@ obs_properties_t *PluginSource::OnGetProperties(void *data) {
 	obs_property_set_enabled(streamUrl, false);
 	obs_properties_add_button2(props, "CopyStreamUrl", "Copy", &PluginSource::onCopyStreamUrlClicked, source);
 
-	source->scheduleLarixQr();
+	source->scheduleAppQrCodes();
 
 	obs_property_list_add_string(protocolList, "SRTLA", "SRTLA");
 	obs_property_list_add_string(protocolList, "SRT", "SRT");
