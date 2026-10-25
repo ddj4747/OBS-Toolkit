@@ -16,6 +16,7 @@ public:
 
 private:
 	static MediamtxManager *sharedManager();
+	static MediamtxManager *s_manager;
 
 	MediamtxManager *m_manager{nullptr};
 	std::string m_streamId;

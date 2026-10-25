@@ -15,14 +15,13 @@
 
 #include <algorithm>
 
-namespace {
-const std::string PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
-const QString SETTINGS_ICON_PATH = QStringLiteral("settings/general.svg");
-const QString WEB_PANEL_ICON_PATH = QStringLiteral("sources/globe.svg");
-const QString ARROW_UP_ICON_PATH = QStringLiteral("up.svg");
-const QString ARROW_DOWN_ICON_PATH = QStringLiteral("down.svg");
+const std::string PluginDock::PLUGIN_DOCK_ID = std::string(PLUGIN_NAME) + "_mainDock";
+const QString PluginDock::SETTINGS_ICON_PATH = QStringLiteral("settings/general.svg");
+const QString PluginDock::WEB_PANEL_ICON_PATH = QStringLiteral("sources/globe.svg");
+const QString PluginDock::ARROW_UP_ICON_PATH = QStringLiteral("up.svg");
+const QString PluginDock::ARROW_DOWN_ICON_PATH = QStringLiteral("down.svg");
 
-QIcon streamStatusIcon(const bool active) {
+QIcon PluginDock::streamStatusIcon(const bool active) {
 	if (active) {
 		return QIcon(QStringLiteral(":/res/images/streaming-active.svg"));
 	}
@@ -30,18 +29,7 @@ QIcon streamStatusIcon(const bool active) {
 						  : QStringLiteral(":/res/images/streaming-inactive.svg"));
 }
 
-constexpr int TYPE_ICON_ROLE = Qt::UserRole;
-constexpr int STATUS_ICON_ROLE = Qt::UserRole + 1;
-constexpr int STATUS_ACTIVE_ROLE = Qt::UserRole + 2;
-constexpr int STATUS_REFRESH_INTERVAL_MS = 500;
-
-constexpr int ROW_MARGIN = 6;
-constexpr int ROW_ICON_SIZE = 16;
-constexpr int ROW_SPACING = 8;
-constexpr int STATUS_SECTION_PADDING = 8;
-constexpr int STATUS_SECTION_WIDTH = ROW_ICON_SIZE + 2 * STATUS_SECTION_PADDING;
-
-class SourceRowDelegate final : public QStyledItemDelegate {
+class PluginDock::SourceRowDelegate final : public QStyledItemDelegate {
 public:
 	using QStyledItemDelegate::QStyledItemDelegate;
 
@@ -93,7 +81,7 @@ public:
 	}
 };
 
-void restoreSavedDockLayout() {
+void PluginDock::restoreSavedDockLayout() {
 	config_t *userConfig = obs_frontend_get_user_config();
 	if (!userConfig) {
 		return;
@@ -112,7 +100,6 @@ void restoreSavedDockLayout() {
 	const QByteArray dockState = QByteArray::fromBase64(QByteArray(dockStateStr));
 	mainWindow->restoreState(dockState);
 }
-} // namespace
 
 PluginDock::PluginDock(QWidget *parent)
 	: QWidget(parent),

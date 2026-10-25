@@ -1,8 +1,11 @@
 #include <PortForwardUtils.h>
 
 #include <QtConcurrent/QtConcurrent>
+#include <QUdpSocket>
 #include <iostream>
+#include <mutex>
 #include <plugin-support.h>
+#include <set>
 
 #include <miniupnpc/miniupnpc.h>
 #include <miniupnpc/upnpcommands.h>
@@ -81,6 +84,50 @@ std::optional<std::string> PortForwarder::publicAddress() const {
 
 uint16_t PortForwarder::getAvailablePort() {
 	return 5000; // TODO implement this function
+}
+
+std::mutex PortForwarder::s_reservedPortsMutex;
+std::set<uint16_t> PortForwarder::s_reservedPorts;
+
+bool PortForwarder::udpPortFree(const uint16_t port) {
+	QUdpSocket socket;
+	return socket.bind(QHostAddress::AnyIPv4, port, QAbstractSocket::DontShareAddress);
+}
+
+uint16_t PortForwarder::reserveUdpPort(const uint16_t preferred) {
+	std::lock_guard<std::mutex> lock(s_reservedPortsMutex);
+
+	if (preferred != 0 && !s_reservedPorts.contains(preferred) && udpPortFree(preferred)) {
+		s_reservedPorts.insert(preferred);
+		return preferred;
+	}
+
+	for (int attempt = 0; attempt < 32; ++attempt) {
+		QUdpSocket socket;
+		if (!socket.bind(QHostAddress::AnyIPv4, 0, QAbstractSocket::DontShareAddress)) {
+			return 0;
+		}
+
+		const auto port = static_cast<uint16_t>(socket.localPort());
+		socket.close();
+		if (port == 0 || s_reservedPorts.contains(port)) {
+			continue;
+		}
+
+		s_reservedPorts.insert(port);
+		return port;
+	}
+
+	return 0;
+}
+
+void PortForwarder::releaseUdpPort(const uint16_t port) {
+	if (port == 0) {
+		return;
+	}
+
+	std::lock_guard<std::mutex> lock(s_reservedPortsMutex);
+	s_reservedPorts.erase(port);
 }
 
 bool PortForwarder::tryForwardPortUPnP() {

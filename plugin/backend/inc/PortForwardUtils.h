@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
+#include <set>
 
 #include <QFuture>
 #include <QTimer>
@@ -28,6 +30,8 @@ public:
 	std::optional<std::string> publicAddress() const;
 
 	static uint16_t getAvailablePort();
+	static uint16_t reserveUdpPort(uint16_t preferred = 0);
+	static void releaseUdpPort(uint16_t port);
 
 signals:
 	void onPortForwardFinished(bool success);
@@ -39,6 +43,10 @@ private:
 
 	static constexpr std::chrono::seconds LEASE_RENEW_INTERVAL = std::chrono::seconds(60);
 	static constexpr std::chrono::seconds LEASE_DURATION = std::chrono::seconds(90);
+
+	static std::mutex s_reservedPortsMutex;
+	static std::set<uint16_t> s_reservedPorts;
+	static bool udpPortFree(uint16_t port);
 
 	std::string m_port;
 	std::string m_protocol;

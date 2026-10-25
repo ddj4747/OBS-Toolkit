@@ -10,8 +10,7 @@
 #include <EventManager.h>
 #include <FrontendEvents.h>
 
-namespace {
-QBrush makeDiagHatchBrush(const QColor &color, const int lineWidth = 2, const int spacing = 8) {
+QBrush SourcePartitionSelector::makeDiagHatchBrush(const QColor &color, const int lineWidth, const int spacing) {
 	const int size = spacing;
 	QPixmap pixmap(size, size);
 	pixmap.fill(Qt::transparent);
@@ -27,7 +26,6 @@ QBrush makeDiagHatchBrush(const QColor &color, const int lineWidth = 2, const in
 
 	return QBrush(pixmap);
 }
-} // namespace
 
 SourcePartitionSelector::SourcePartitionSelector(QWidget *parent, const int minValue, const int maxValue)
 	: QWidget(parent),

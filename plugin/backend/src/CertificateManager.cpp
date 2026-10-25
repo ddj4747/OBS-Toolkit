@@ -17,18 +17,7 @@
 
 std::mutex CertificateManager::s_mutex;
 
-namespace {
-constexpr long CERTIFICATE_LIFETIME_SECONDS = 60L * 60 * 24 * 30;
-constexpr time_t CERTIFICATE_MINIMAL_TIME_LEFT_SECONDS = 60 * 10;
-constexpr int SERIAL_NUMBER_BITS = 64;
-
-using BioPtr = std::unique_ptr<BIO, decltype(&BIO_free)>;
-using X509Ptr = std::unique_ptr<X509, decltype(&X509_free)>;
-using EvpPkeyPtr = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
-using BignumPtr = std::unique_ptr<BIGNUM, decltype(&BN_free)>;
-using X509NamePtr = std::unique_ptr<X509_NAME, decltype(&X509_NAME_free)>;
-
-std::string openSSLError() {
+std::string CertificateManager::openSSLError() {
 	const unsigned long error = ERR_get_error();
 	ERR_clear_error();
 	if (error == 0) {
@@ -40,12 +29,12 @@ std::string openSSLError() {
 	return buffer;
 }
 
-std::string displayPath(const std::filesystem::path &path) {
+std::string CertificateManager::displayPath(const std::filesystem::path &path) {
 	const auto utf8 = path.u8string();
 	return {reinterpret_cast<const char *>(utf8.data()), utf8.size()};
 }
 
-bool writeBioToFile(BIO *bio, const std::filesystem::path &path) {
+bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &path) {
 	char *data = nullptr;
 	const long size = BIO_get_mem_data(bio, &data);
 	if (size < 0 || (size > 0 && !data)) {
@@ -78,7 +67,7 @@ bool writeBioToFile(BIO *bio, const std::filesystem::path &path) {
 	return true;
 }
 
-X509Ptr readCertificate(const std::filesystem::path &path) {
+CertificateManager::X509Ptr CertificateManager::readCertificate(const std::filesystem::path &path) {
 	std::ifstream file(path, std::ios::binary);
 	if (!file) {
 		return {nullptr, X509_free};
@@ -93,13 +82,13 @@ X509Ptr readCertificate(const std::filesystem::path &path) {
 	return {PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), X509_free};
 }
 
-bool setRandomSerialNumber(X509 *certificate) {
+bool CertificateManager::setRandomSerialNumber(X509 *certificate) {
 	const BignumPtr serial(BN_new(), BN_free);
 	return serial && BN_rand(serial.get(), SERIAL_NUMBER_BITS, BN_RAND_TOP_ONE, BN_RAND_BOTTOM_ANY) == 1 &&
 	       BN_to_ASN1_INTEGER(serial.get(), X509_get_serialNumber(certificate)) != nullptr;
 }
 
-bool setSubjectAndIssuer(X509 *certificate) {
+bool CertificateManager::setSubjectAndIssuer(X509 *certificate) {
 	const X509NamePtr name(X509_NAME_new(), X509_NAME_free);
 	if (!name) {
 		return false;
@@ -115,7 +104,7 @@ bool setSubjectAndIssuer(X509 *certificate) {
 	       X509_set_issuer_name(certificate, name.get()) == 1;
 }
 
-bool addCaBasicConstraints(X509 *certificate) {
+bool CertificateManager::addCaBasicConstraints(X509 *certificate) {
 	X509V3_CTX context;
 	X509V3_set_ctx_nodb(&context);
 	X509V3_set_ctx(&context, certificate, certificate, nullptr, nullptr, 0);
@@ -126,7 +115,7 @@ bool addCaBasicConstraints(X509 *certificate) {
 	return added;
 }
 
-std::string toHex(const unsigned char *data, const unsigned int length) {
+std::string CertificateManager::toHex(const unsigned char *data, const unsigned int length) {
 	std::ostringstream stream;
 	stream << std::hex << std::setfill('0');
 	for (unsigned int i = 0; i < length; ++i) {
@@ -134,7 +123,6 @@ std::string toHex(const unsigned char *data, const unsigned int length) {
 	}
 	return stream.str();
 }
-} // namespace
 
 bool CertificateManager::generateCertificate(const std::filesystem::path &privateKeyPath,
 					     const std::filesystem::path &certificatePath) {

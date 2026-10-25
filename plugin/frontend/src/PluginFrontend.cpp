@@ -6,8 +6,7 @@
 
 PluginFrontend *PluginFrontend::s_instance{nullptr};
 
-namespace {
-void ensureConfigDirectoryExists() {
+void PluginFrontend::ensureConfigDirectoryExists() {
 	char *configDir = obs_module_config_path("");
 	if (!configDir) {
 		return;
@@ -16,7 +15,6 @@ void ensureConfigDirectoryExists() {
 	os_mkdirs(configDir);
 	bfree(configDir);
 }
-} // namespace
 
 void PluginFrontend::start() {
 	if (s_instance) {

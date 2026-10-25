@@ -13,11 +13,7 @@
 #include <cstring>
 #include <functional>
 
-namespace {
-constexpr const char *API_SERVER_HOST = "0.0.0.0";
-constexpr uint16_t API_SERVER_PORT = 5643;
-
-void runOnUiThread(const std::function<void()> &function) {
+void API_Endpoint::runOnUiThread(const std::function<void()> &function) {
 	QCoreApplication *app = QCoreApplication::instance();
 	if (!app || QThread::currentThread() == app->thread()) {
 		function();
@@ -26,7 +22,6 @@ void runOnUiThread(const std::function<void()> &function) {
 
 	QMetaObject::invokeMethod(app, function, Qt::BlockingQueuedConnection);
 }
-} // namespace
 
 API_Endpoint &API_Endpoint::getInstance() {
 	static API_Endpoint instance = API_Endpoint();

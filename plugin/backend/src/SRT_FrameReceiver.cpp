@@ -22,23 +22,26 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
-namespace {
-constexpr auto c_reconnectRetryInterval = std::chrono::seconds(5);
-
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
-int ffmpegInterruptCallback(void *opaque) {
+int SRT_FrameReceiver::ffmpegInterruptCallback(void *opaque) {
 	const auto *stop = static_cast<const std::atomic<bool> *>(opaque);
 	return (stop != nullptr && stop->load()) ? 1 : 0;
 }
 
-void logFfmpegError(const int level, const char *action, const int errorCode) {
+void SRT_FrameReceiver::logFfmpegError(const int level, const char *action, const int errorCode) {
+	// FFmpeg built with MinGW reports ETIMEDOUT as -138, which av_strerror does not name.
+	if (errorCode == -138) {
+		obs_log(level, "SRT_FrameReceiver: %s: connection timed out", action);
+		return;
+	}
+
 	char errorBuffer[AV_ERROR_MAX_STRING_SIZE] = {};
 	av_strerror(errorCode, errorBuffer, sizeof(errorBuffer));
 	obs_log(level, "SRT_FrameReceiver: %s: %s", action, errorBuffer);
 }
 
-void ffmpegLog(void *ptr, int level, const char *fmt, va_list vl) {
-	if (level > AV_LOG_VERBOSE)
+void SRT_FrameReceiver::ffmpegLog(void *ptr, int level, const char *fmt, va_list vl) {
+	if (level > AV_LOG_WARNING)
 		return;
 	char line[1024];
 	int prefix = 1;
@@ -46,7 +49,7 @@ void ffmpegLog(void *ptr, int level, const char *fmt, va_list vl) {
 	obs_log(LOG_INFO, "ffmpeg: %s", line);
 }
 
-video_format ffmpegToObsFormat(const AVPixelFormat format) {
+video_format SRT_FrameReceiver::ffmpegToObsFormat(const AVPixelFormat format) {
 	switch (format) {
 	case AV_PIX_FMT_YUV420P:
 		return VIDEO_FORMAT_I420;
@@ -61,7 +64,7 @@ video_format ffmpegToObsFormat(const AVPixelFormat format) {
 	}
 }
 
-audio_format ffmpegToObsAudioFormat(const AVSampleFormat format) {
+audio_format SRT_FrameReceiver::ffmpegToObsAudioFormat(const AVSampleFormat format) {
 	switch (format) {
 	case AV_SAMPLE_FMT_FLTP:
 		return AUDIO_FORMAT_FLOAT_PLANAR;
@@ -76,7 +79,7 @@ audio_format ffmpegToObsAudioFormat(const AVSampleFormat format) {
 	}
 }
 
-speaker_layout ffmpegToObsSpeakers(const int channels) {
+speaker_layout SRT_FrameReceiver::ffmpegToObsSpeakers(const int channels) {
 	switch (channels) {
 	case 1:
 		return SPEAKERS_MONO;
@@ -97,15 +100,15 @@ speaker_layout ffmpegToObsSpeakers(const int channels) {
 	}
 }
 
-bool codecAllowed(const AVCodecID codecId) {
+bool SRT_FrameReceiver::codecAllowed(const AVCodecID codecId) {
 	return std::ranges::contains(c_videoCodecs, codecId);
 }
 
-bool audioCodecAllowed(const AVCodecID codecId) {
+bool SRT_FrameReceiver::audioCodecAllowed(const AVCodecID codecId) {
 	return std::ranges::contains(c_audioCodecs, codecId);
 }
 
-const AVCodec *findSoftwareDecoder(const AVCodecID codecId) {
+const AVCodec *SRT_FrameReceiver::findSoftwareDecoder(const AVCodecID codecId) {
 	const AVCodec *defaultDecoder = avcodec_find_decoder(codecId);
 	if (defaultDecoder != nullptr && (defaultDecoder->capabilities & AV_CODEC_CAP_HARDWARE) == 0) {
 		return defaultDecoder;
@@ -122,7 +125,7 @@ const AVCodec *findSoftwareDecoder(const AVCodecID codecId) {
 	return defaultDecoder;
 }
 
-void setObsColorMetadata(obs_source_frame &obsFrame, const AVFrame *frame) {
+void SRT_FrameReceiver::setObsColorMetadata(obs_source_frame &obsFrame, const AVFrame *frame) {
 	const video_colorspace colorSpace =
 		frame->colorspace == AVCOL_SPC_SMPTE170M || frame->colorspace == AVCOL_SPC_BT470BG ? VIDEO_CS_601
 												   : VIDEO_CS_709;
@@ -132,8 +135,6 @@ void setObsColorMetadata(obs_source_frame &obsFrame, const AVFrame *frame) {
 	(void)video_format_get_parameters_for_format(colorSpace, range, obsFrame.format, obsFrame.color_matrix,
 						     obsFrame.color_range_min, obsFrame.color_range_max);
 }
-
-} // namespace
 
 void ScaledBuffer::reset() {
 	if (data[0])
@@ -685,9 +686,7 @@ bool SRT_FrameReceiver::openStream() {
 	av_dict_free(&options);
 
 	if (ret < 0) {
-		char errorBuffer[128];
-		av_strerror(ret, errorBuffer, sizeof(errorBuffer));
-		obs_log(LOG_WARNING, "SRT_FrameReceiver: avformat_open_input failed: %s", errorBuffer);
+		logFfmpegError(LOG_WARNING, "avformat_open_input failed", ret);
 		return false;
 	}
 

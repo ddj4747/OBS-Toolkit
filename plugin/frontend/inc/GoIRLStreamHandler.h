@@ -14,6 +14,7 @@ public:
 	void start(const std::string &streamId, StreamProtocol protocol, const std::string &publicAddress,
 		   uint16_t port) override;
 	void stop(const std::string &streamId) override;
+	NO_DISCARD uint16_t localSrtPort() const;
 
 private:
 	GoIRL_Process *m_process{nullptr};

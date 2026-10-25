@@ -2,6 +2,7 @@
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <httplib/httplib.h>
@@ -23,6 +24,11 @@ public:
 private slots:
 
 private:
+	static constexpr const char *API_SERVER_HOST = "0.0.0.0";
+	static constexpr uint16_t API_SERVER_PORT = 5643;
+
+	static void runOnUiThread(const std::function<void()> &function);
+
 	void registerEndpoints() const;
 	bool authorize(const httplib::Request &req, httplib::Response &res) const;
 

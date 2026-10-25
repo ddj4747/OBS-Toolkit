@@ -2,7 +2,13 @@
 
 #include <algorithm>
 #include <iterator>
+#include <map>
+#include <mutex>
 #include <string_view>
+
+extern "C" {
+#include <libavutil/log.h>
+}
 
 namespace {
 constexpr std::string_view c_preferredDecoders[] = {
@@ -104,9 +110,7 @@ bool canOpenDecoder(const AVCodec *codec) {
 	return ret == 0;
 }
 
-} // namespace
-
-std::vector<DecoderInfo> findDecoders(const AVCodecID codecId) {
+std::vector<DecoderInfo> collectDecoders(const AVCodecID codecId) {
 	std::vector<DecoderInfo> result;
 
 	void *iterator = nullptr;
@@ -133,5 +137,25 @@ std::vector<DecoderInfo> findDecoders(const AVCodecID codecId) {
 		return preferredDecoderRank(left) < preferredDecoderRank(right);
 	});
 
+	return result;
+}
+
+} // namespace
+
+std::vector<DecoderInfo> findDecoders(const AVCodecID codecId) {
+	static std::mutex cacheMutex;
+	static std::map<AVCodecID, std::vector<DecoderInfo>> cache;
+
+	std::lock_guard<std::mutex> lock(cacheMutex);
+	if (const auto cached = cache.find(codecId); cached != cache.end()) {
+		return cached->second;
+	}
+
+	const int previousLevel = av_log_get_level();
+	av_log_set_level(AV_LOG_QUIET);
+	std::vector<DecoderInfo> result = collectDecoders(codecId);
+	av_log_set_level(previousLevel);
+
+	cache.emplace(codecId, result);
 	return result;
 }

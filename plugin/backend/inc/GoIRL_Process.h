@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
 #include <QProcess>
 #include <cstdint>
@@ -18,8 +19,6 @@ public:
 	GoIRL_Process(const GoIRL_Process &) = delete;
 	GoIRL_Process &operator=(const GoIRL_Process &) = delete;
 
-	static constexpr uint16_t c_localSrtPort = 5001;
-
 	explicit GoIRL_Process(uint16_t port);
 	~GoIRL_Process() override;
 
@@ -27,6 +26,7 @@ public:
 	void stopServer();
 	std::string getStreamUrl(const std::string &publicAddress);
 
+	NO_DISCARD uint16_t localSrtPort() const;
 	NO_DISCARD bool running() const;
 
 signals:
@@ -35,13 +35,16 @@ signals:
 	void serverError(ServerError error);
 
 private:
-	void onProcessStarted();
 	void onProcessErrorOccurred(QProcess::ProcessError error);
 	void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+	void readProcessError();
 	void terminateProcess();
 	void cleanupProcess();
 
 	QProcess *m_process{nullptr};
+	QByteArray m_stderrBuffer;
 	uint16_t m_port{0};
+	uint16_t m_localSrtPort{0};
 	bool m_stopRequested{false};
+	bool m_listening{false};
 };

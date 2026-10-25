@@ -55,6 +55,8 @@ public:
 private:
 	static PluginFrontend *s_instance;
 
+	static void ensureConfigDirectoryExists();
+
 	PluginDock *m_pluginDock;
 	obs_data *m_settings{nullptr};
 	PluginSettingsWindow *m_pluginSettingsWindow;

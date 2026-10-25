@@ -6,9 +6,7 @@
 
 #include <QThread>
 
-namespace {
-MediamtxManager *s_manager = nullptr;
-}
+MediamtxManager *MediamtxStreamHandler::s_manager = nullptr;
 
 MediamtxStreamHandler::MediamtxStreamHandler(QObject *parent) : StreamHandler(parent), m_manager(sharedManager()) {
 	QObject::connect(m_manager, &MediamtxManager::serverStarted, this,

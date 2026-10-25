@@ -2,6 +2,8 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
+#include <cstdarg>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -141,6 +143,18 @@ private:
 	static bool isHardwareFrame(const AVFrame *frame);
 	void resetHardwareDecoder();
 
+	static int ffmpegInterruptCallback(void *opaque);
+	static void logFfmpegError(int level, const char *action, int errorCode);
+	static void ffmpegLog(void *ptr, int level, const char *fmt, va_list vl);
+	static video_format ffmpegToObsFormat(AVPixelFormat format);
+	static audio_format ffmpegToObsAudioFormat(AVSampleFormat format);
+	static speaker_layout ffmpegToObsSpeakers(int channels);
+	static bool codecAllowed(AVCodecID codecId);
+	static bool audioCodecAllowed(AVCodecID codecId);
+	static const AVCodec *findSoftwareDecoder(AVCodecID codecId);
+	static void setObsColorMetadata(obs_source_frame &obsFrame, const AVFrame *frame);
+
+	static constexpr auto c_reconnectRetryInterval = std::chrono::seconds(5);
 	static constexpr int c_maxWidth = 4096;
 	static constexpr int c_maxHeight = 4096;
 	static constexpr int64_t c_maxPixels = 3840LL * 2160;

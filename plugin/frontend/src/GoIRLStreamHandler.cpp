@@ -40,6 +40,10 @@ void GoIRLStreamHandler::start(const std::string &streamId, const StreamProtocol
 	m_process->startServer(streamId);
 }
 
+uint16_t GoIRLStreamHandler::localSrtPort() const {
+	return m_process ? m_process->localSrtPort() : 0;
+}
+
 void GoIRLStreamHandler::stop(const std::string &) {
 	if (m_process) {
 		m_process->stopServer();

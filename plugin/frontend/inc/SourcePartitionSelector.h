@@ -1,6 +1,8 @@
 #pragma once
 
 #include <MultiValueSlider.h>
+#include <QBrush>
+#include <QColor>
 #include <QEnterEvent>
 #include <QEvent>
 #include <QMenu>
@@ -37,6 +39,8 @@ private slots:
 	void removeSelectedHandle() const;
 
 private:
+	static QBrush makeDiagHatchBrush(const QColor &color, int lineWidth = 2, int spacing = 8);
+
 	QHBoxLayout *m_layout;
 	QMenu *m_menu;
 	QAction *m_removeValueAction{nullptr};

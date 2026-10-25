@@ -222,10 +222,11 @@ std::string PluginSource::generateStreamId() {
 	return uuidStr.substr(1, uuidStr.size() - 2);
 }
 
-std::vector<PluginSource::ForwardingConfig> PluginSource::forwardingConfigs() const {
+std::vector<PluginSource::ForwardingConfig> PluginSource::forwardingConfigs() {
 	switch (m_protocol) {
 	case StreamProtocol::SRTLA:
-		return {{c_srtlaPort, PortForwarder::Protocol::UDP}};
+		m_reservedSrtlaPort = PortForwarder::reserveUdpPort(c_srtlaPort);
+		return {{m_reservedSrtlaPort, PortForwarder::Protocol::UDP}};
 	case StreamProtocol::SRT:
 		return {{c_srtPort, PortForwarder::Protocol::UDP}};
 	case StreamProtocol::RTMP:
@@ -244,6 +245,15 @@ std::vector<PluginSource::ForwardingConfig> PluginSource::forwardingConfigs() co
 	default:
 		return {{PortForwarder::getAvailablePort(), PortForwarder::Protocol::UDP}};
 	}
+}
+
+void PluginSource::releaseReservedSrtlaPort() {
+	if (m_reservedSrtlaPort == 0) {
+		return;
+	}
+
+	PortForwarder::releaseUdpPort(m_reservedSrtlaPort);
+	m_reservedSrtlaPort = 0;
 }
 
 void PluginSource::deleteOnOwningThread(QObject *object) {
@@ -356,6 +366,17 @@ void PluginSource::startReceiver() {
 	}
 
 	const std::vector<ForwardingConfig> configs = forwardingConfigs();
+	if (configs.empty() || std::any_of(configs.begin(), configs.end(),
+					   [](const ForwardingConfig &config) { return config.port == 0; })) {
+		obs_log(LOG_ERROR, "failed to allocate a listener port");
+		releaseReservedSrtlaPort();
+		return;
+	}
+
+	if (m_protocol == StreamProtocol::SRTLA && m_reservedSrtlaPort != c_srtlaPort) {
+		obs_log(LOG_INFO, "SRTLA port %u is in use; listening on %u", c_srtlaPort, m_reservedSrtlaPort);
+	}
+
 	m_portForwarders.reserve(configs.size());
 	for (const ForwardingConfig &config : configs) {
 		m_portForwarders.push_back(new PortForwarder(config.port, config.protocol));
@@ -439,10 +460,16 @@ void PluginSource::onStreamUnavailable(const QString &streamId) {
 
 void PluginSource::onStreamStopped(const QString &streamId) {
 	obs_log(LOG_INFO, "stream handler stopped for '%s'", qUtf8Printable(streamId));
+	if (streamId == obs_helpers::fromStdString(m_streamId)) {
+		stopFrameReceiver();
+	}
 }
 
 void PluginSource::onStreamError(const QString &streamId, const QString &error) {
 	obs_log(LOG_ERROR, "stream handler error for '%s': %s", qUtf8Printable(streamId), qUtf8Printable(error));
+	if (streamId == obs_helpers::fromStdString(m_streamId)) {
+		stopFrameReceiver();
+	}
 }
 
 QString PluginSource::larixLink() const {
@@ -515,8 +542,15 @@ void PluginSource::startFrameReceiver() {
 	}
 
 	if (m_protocol == StreamProtocol::SRTLA) {
-		m_frameReceiver = new SRT_FrameReceiver(GoIRL_Process::c_localSrtPort,
-							std::format("{}-client", m_streamId), m_selectedCodecs);
+		const auto *handler = dynamic_cast<const GoIRLStreamHandler *>(m_streamHandler);
+		const uint16_t port = handler ? handler->localSrtPort() : 0;
+		if (port == 0) {
+			obs_log(LOG_ERROR, "SRTLA reader has no local SRT port");
+			return;
+		}
+
+		obs_log(LOG_INFO, "reading SRTLA from 127.0.0.1:%u as %s-client", port, m_streamId.c_str());
+		m_frameReceiver = new SRT_FrameReceiver(port, std::format("{}-client", m_streamId), m_selectedCodecs);
 	} else {
 		const std::string mediaPath = m_protocol == StreamProtocol::RTMP ? std::format("app/{}", m_streamId)
 										 : m_streamId;
@@ -539,6 +573,7 @@ void PluginSource::stopFrameReceiver() {
 }
 
 void PluginSource::destroyPortForwarder() {
+	releaseReservedSrtlaPort();
 	const std::vector<PortForwarder *> portForwarders = std::move(m_portForwarders);
 	m_pendingPortForwards = 0;
 	for (PortForwarder *forwarder : portForwarders) {
