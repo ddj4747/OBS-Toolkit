@@ -4,6 +4,7 @@
 #include "PluginDock.h"
 #include "PluginFrontend.h"
 
+#include <AppQrRow.h>
 #include <GoIRLStreamHandler.h>
 #include <GoIRL_Process.h>
 #include <MediamtxStreamHandler.h>
@@ -15,16 +16,10 @@
 #include <QCoreApplication>
 #include <QFormLayout>
 #include <QGuiApplication>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
-#include <QPixmap>
-#include <QResizeEvent>
-#include <QShowEvent>
-#include <QSizePolicy>
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
@@ -252,119 +247,10 @@ bool PluginSource::onCopyStreamUrlClicked(obs_properties_t *, obs_property_t *, 
 	return false;
 }
 
-class AppQrRow : public QWidget {
-public:
-	explicit AppQrRow(QWidget *parent = nullptr) : QWidget(parent) {
-		setObjectName(QStringLiteral("pluginSourceQrRow"));
-		setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-
-		auto *rowLayout = new QHBoxLayout(this);
-		rowLayout->setContentsMargins(0, 0, 0, 0);
-		rowLayout->setSpacing(16);
-		rowLayout->setSizeConstraint(QLayout::SetNoConstraint);
-
-		const char *titles[] = {"Larix", "Moblin", "IRL Pro"};
-		const char *names[] = {"pluginSourceQrLarix", "pluginSourceQrMoblin", "pluginSourceQrIrlPro"};
-		for (int index = 0; index < 3; ++index) {
-			auto *cell = new QWidget(this);
-			cell->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-			auto *cellLayout = new QVBoxLayout(cell);
-			cellLayout->setContentsMargins(0, 0, 0, 0);
-			cellLayout->setSpacing(6);
-
-			auto *title = new QLabel(QString::fromUtf8(titles[index]), cell);
-			title->setAlignment(Qt::AlignCenter);
-			m_previews[index] = new QLabel(cell);
-			m_previews[index]->setObjectName(QLatin1String(names[index]));
-			m_previews[index]->setAlignment(Qt::AlignCenter);
-			m_previews[index]->setScaledContents(false);
-			m_previews[index]->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-			cellLayout->addWidget(title);
-			cellLayout->addWidget(m_previews[index], 0, Qt::AlignHCenter);
-			rowLayout->addWidget(cell, 1);
-		}
-	}
-
-	void setLinks(const QString &larixLink, const QString &moblinLink, const QString &irlProLink) {
-		m_links[0] = larixLink;
-		m_links[1] = moblinLink;
-		m_links[2] = irlProLink;
-		for (int index = 0; index < 3; ++index) {
-			updatePixmap(index);
-		}
-	}
-
-	QSize minimumSizeHint() const override { return {0, m_side > 0 ? m_side + 28 : 28}; }
-
-	QSize sizeHint() const override { return {3 * 280, m_side > 0 ? m_side + 28 : 28}; }
-
-protected:
-	void resizeEvent(QResizeEvent *event) override {
-		QWidget::resizeEvent(event);
-		applySquareSize();
-	}
-
-	void showEvent(QShowEvent *event) override {
-		QWidget::showEvent(event);
-		applySquareSize();
-	}
-
-private:
-	void applySquareSize() {
-		auto *rowLayout = static_cast<QHBoxLayout *>(layout());
-		const int inner = std::max(0, contentsRect().width() - rowLayout->spacing() * 2);
-		const int side = std::clamp(inner / 3, 1, 280);
-		if (side == m_side) {
-			return;
-		}
-
-		m_side = side;
-		for (int index = 0; index < 3; ++index) {
-			m_previews[index]->setFixedSize(side, side);
-			updatePixmap(index);
-		}
-
-		const int height = side + 28;
-		setMinimumHeight(height);
-		setMaximumHeight(height);
-	}
-
-	void updatePixmap(const int index) {
-		QLabel *preview = m_previews[index];
-		const QString &link = m_links[index];
-		if (m_side <= 0) {
-			return;
-		}
-		if (link.isEmpty()) {
-			preview->setPixmap(QPixmap());
-			preview->setText(QStringLiteral("No link yet"));
-			return;
-		}
-
-		const QPixmap qr = obs_helpers::getQrFromURL(link, qrcodegen::QrCode::Ecc::LOW);
-		if (qr.isNull()) {
-			preview->setPixmap(QPixmap());
-			preview->setText(QStringLiteral("Could not create QR code"));
-			return;
-		}
-
-		const int modules = std::max(1, qr.width());
-		const int factor = std::max(1, m_side / modules);
-		const int pixels = modules * factor;
-		preview->setText(QString());
-		preview->setPixmap(qr.scaled(pixels, pixels, Qt::KeepAspectRatio, Qt::FastTransformation));
-	}
-
-	QLabel *m_previews[3]{};
-	QString m_links[3];
-	int m_side = -1;
-};
-
 void PluginSource::attachAppQrCodes(const QString &larixLink, const QString &moblinLink, const QString &irlProLink) {
-
-	QLabel *streamUrlLabel = nullptr;
+	const QLabel *streamUrlLabel = nullptr;
 	for (QWidget *top : QApplication::topLevelWidgets()) {
-		for (QLabel *label : top->findChildren<QLabel *>()) {
+		for (const QLabel *label : top->findChildren<QLabel *>()) {
 			if (label->objectName().startsWith(QLatin1String(c_qrNamePrefix))) {
 				continue;
 			}
@@ -388,8 +274,8 @@ void PluginSource::attachAppQrCodes(const QString &larixLink, const QString &mob
 	}
 
 	for (int row = layout->rowCount() - 1; row >= 0; --row) {
-		QLayoutItem *field = layout->itemAt(row, QFormLayout::FieldRole);
-		QLayoutItem *spanning = layout->itemAt(row, QFormLayout::SpanningRole);
+		const QLayoutItem *field = layout->itemAt(row, QFormLayout::FieldRole);
+		const QLayoutItem *spanning = layout->itemAt(row, QFormLayout::SpanningRole);
 		QWidget *widget = spanning && spanning->widget() ? spanning->widget() : nullptr;
 		if (!widget && field) {
 			widget = field->widget();
