@@ -1,0 +1,72 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float4 color;
+uniform float4 outline_color;
+uniform float2 pixel_size;
+uniform float outline_radius;
+
+sampler_state def_sampler {
+    Filter    = Linear;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
+};
+
+struct VertInOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertInOut VSIcon(VertInOut vert_in)
+{
+    VertInOut vert_out;
+    vert_out.pos = mul(float4(vert_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv  = vert_in.uv;
+    return vert_out;
+}
+
+float sample_alpha(float2 uv)
+{
+    return image.Sample(def_sampler, uv).a;
+}
+
+float4 PSIcon(VertInOut vert_in) : TARGET
+{
+    float center = sample_alpha(vert_in.uv);
+    float spread = center;
+    if (outline_radius > 0.0) {
+        float2 radius = pixel_size * outline_radius;
+        float2 diagonal = radius * 0.7071;
+        float2 half_radius = radius * 0.5;
+        float2 half_diagonal = diagonal * 0.5;
+        spread = max(spread, sample_alpha(vert_in.uv + float2(radius.x, 0.0)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(-radius.x, 0.0)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(0.0, radius.y)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(0.0, -radius.y)));
+        spread = max(spread, sample_alpha(vert_in.uv + diagonal));
+        spread = max(spread, sample_alpha(vert_in.uv - diagonal));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(diagonal.x, -diagonal.y)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(-diagonal.x, diagonal.y)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(half_radius.x, 0.0)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(-half_radius.x, 0.0)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(0.0, half_radius.y)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(0.0, -half_radius.y)));
+        spread = max(spread, sample_alpha(vert_in.uv + half_diagonal));
+        spread = max(spread, sample_alpha(vert_in.uv - half_diagonal));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(half_diagonal.x, -half_diagonal.y)));
+        spread = max(spread, sample_alpha(vert_in.uv + float2(-half_diagonal.x, half_diagonal.y)));
+    }
+
+    float edge = saturate(spread - center);
+    float4 fill = float4(color.rgb * center * color.a, center * color.a);
+    float4 stroke = float4(outline_color.rgb * edge * outline_color.a, edge * outline_color.a);
+    return fill + stroke * (1.0 - fill.a);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSIcon(vert_in);
+        pixel_shader  = PSIcon(vert_in);
+    }
+}

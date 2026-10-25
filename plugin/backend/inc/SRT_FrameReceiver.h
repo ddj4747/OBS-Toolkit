@@ -123,6 +123,7 @@ public:
 
 	NO_DISCARD bool active();
 	uint32_t getBitrate();
+	NO_DISCARD int videoCodec() const;
 
 private:
 	void startReceiver();
@@ -196,4 +197,5 @@ private:
 	std::atomic<uint64_t> m_bitCount{0};
 	std::atomic<uint64_t> m_bitrateLastCheck{0};
 	std::atomic<uint32_t> m_lastBitrate{0};
+	std::atomic<int> m_videoCodecId{AV_CODEC_ID_NONE};
 };

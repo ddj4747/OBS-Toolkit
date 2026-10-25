@@ -379,6 +379,10 @@ uint32_t SRT_FrameReceiver::getBitrate() {
 	return bitrate;
 }
 
+int SRT_FrameReceiver::videoCodec() const {
+	return m_videoCodecId.load(std::memory_order_relaxed);
+}
+
 void SRT_FrameReceiver::startReceiver() {
 	m_forceSoftwareVideoDecoder = false;
 	m_interruptStop.store(false);
@@ -411,6 +415,7 @@ void SRT_FrameReceiver::closeStream() {
 	m_swrSrcChannels = 0;
 	m_videoStreamIdx = -1;
 	m_audioStreamIdx = -1;
+	m_videoCodecId.store(AV_CODEC_ID_NONE, std::memory_order_relaxed);
 }
 
 void SRT_FrameReceiver::receiveThread(const std::stop_token &token) {
@@ -652,6 +657,7 @@ bool SRT_FrameReceiver::openVideoDecoder(const AVCodecParameters *parameters) {
 	}
 
 	m_avCodecContext = std::move(codecContext);
+	m_videoCodecId.store(parameters->codec_id, std::memory_order_relaxed);
 	obs_log(LOG_INFO, "SRT_FrameReceiver: connected, video codec: %s (%dx%d)%s", codec->name, parameters->width,
 		parameters->height, m_usingHardwareDecoder ? " with hardware acceleration" : "");
 	return true;

@@ -129,6 +129,15 @@ uint64_t PluginSource::getBitrate() const {
 	return m_frameReceiver->getBitrate();
 }
 
+AVCodecID PluginSource::videoCodec() const {
+	std::lock_guard<std::mutex> lock(m_frameReceiverMutex);
+	if (!m_frameReceiver) {
+		return AV_CODEC_ID_NONE;
+	}
+
+	return static_cast<AVCodecID>(m_frameReceiver->videoCodec());
+}
+
 bool PluginSource::active() const {
 	std::lock_guard<std::mutex> lock(m_frameReceiverMutex);
 	if (!m_frameReceiver) {
@@ -161,6 +170,26 @@ std::optional<uint64_t> PluginSource::bitrateForName(const std::string &name) {
 		if (sourceName && name == sourceName) {
 			return source->getBitrate();
 		}
+	}
+
+	return std::nullopt;
+}
+
+std::optional<PluginSource::StreamStats> PluginSource::statsForName(const std::string &name) {
+	std::lock_guard<std::mutex> lock(s_instancesMutex);
+	for (PluginSource *source : s_instances) {
+		const char *sourceName = obs_source_get_name(source->m_source);
+		if (!sourceName || name != sourceName) {
+			continue;
+		}
+
+		const uint64_t packed = source->m_videoSize.load(std::memory_order_relaxed);
+		StreamStats stats;
+		stats.bitrate = source->getBitrate();
+		stats.codec = source->videoCodec();
+		stats.width = static_cast<uint32_t>(packed >> 32);
+		stats.height = static_cast<uint32_t>(packed);
+		return stats;
 	}
 
 	return std::nullopt;
@@ -561,6 +590,8 @@ void PluginSource::startFrameReceiver() {
 		[this](const obs_source_frame &frame) {
 			m_width = frame.width;
 			m_height = frame.height;
+			const uint64_t packed = (static_cast<uint64_t>(frame.width) << 32) | frame.height;
+			m_videoSize.store(packed, std::memory_order_relaxed);
 			obs_source_output_video(m_source, &frame);
 		},
 		[this](const obs_source_audio &audio) { obs_source_output_audio(m_source, &audio); });

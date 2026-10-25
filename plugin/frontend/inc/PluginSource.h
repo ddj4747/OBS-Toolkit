@@ -31,10 +31,20 @@ public:
 	static void prepareForShutdown();
 	static std::vector<std::pair<std::string, uint64_t>> getBitrates();
 	static std::vector<std::string> sourceNames();
+
+	struct StreamStats {
+		uint64_t bitrate = 0;
+		uint32_t width = 0;
+		uint32_t height = 0;
+		AVCodecID codec = AV_CODEC_ID_NONE;
+	};
+
 	static std::optional<uint64_t> bitrateForName(const std::string &name);
+	static std::optional<StreamStats> statsForName(const std::string &name);
 
 	NO_DISCARD obs_source_t *getSource() const;
 	NO_DISCARD uint64_t getBitrate() const;
+	NO_DISCARD AVCodecID videoCodec() const;
 	NO_DISCARD bool active() const;
 
 	PluginSource(const PluginSource &) = delete;
@@ -112,6 +122,7 @@ private:
 	obs_source_t *m_source = nullptr;
 	uint32_t m_width{1280};
 	uint32_t m_height{720};
+	std::atomic<uint64_t> m_videoSize{0};
 	bool m_activated{false};
 	bool m_running{false};
 	std::string m_streamId;
