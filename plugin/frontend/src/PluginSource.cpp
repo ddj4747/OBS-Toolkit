@@ -20,6 +20,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
+#include <QUrlQuery>
 #include <magic_enum/magic_enum.hpp>
 #include <algorithm>
 #include <format>
@@ -411,16 +412,22 @@ void PluginSource::onStreamError(const QString &streamId, const QString &error) 
 }
 
 QString PluginSource::larixLink() const {
-	QString url{};
+	QString url = obs_helpers::fromStdString(m_streamUrl);
+	QString srtStreamId;
 	if (m_protocol == StreamProtocol::SRT) {
-		url = obs_helpers::fromStdString(m_streamUrl.substr(0, m_streamUrl.find_last_of('?')));
-	} else {
-		url = obs_helpers::fromStdString(m_streamUrl);
+		const qsizetype query = url.indexOf(QLatin1Char('?'));
+		if (query >= 0) {
+			srtStreamId = QUrlQuery(url.mid(query + 1))
+					      .queryItemValue(QStringLiteral("streamid"), QUrl::FullyDecoded);
+			url.truncate(query);
+		}
+	} else if (m_protocol == StreamProtocol::SRTLA) {
+		srtStreamId = obs_helpers::fromStdString(m_streamId);
 	}
 
 	const char *sourceName = obs_source_get_name(m_source);
-	return obs_helpers::makeLarixLink(QString::fromUtf8(sourceName ? sourceName : ""), url,
-					  obs_helpers::fromStdString(m_streamId), c_larixSrtLatencyMs);
+	return obs_helpers::makeLarixLink(QString::fromUtf8(sourceName ? sourceName : ""), url, srtStreamId,
+					  c_larixSrtLatencyMs);
 }
 
 void PluginSource::updateProperties() const {

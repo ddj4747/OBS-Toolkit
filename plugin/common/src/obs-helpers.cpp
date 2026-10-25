@@ -16,11 +16,16 @@ namespace obs_helpers {
 
 QString makeLarixLink(const QString &name, const QString &url, const QString &streamId, const int latencyMs) {
 	const QString encodedName = QUrl::toPercentEncoding(name);
-	const QString encodedStreamId = QUrl::toPercentEncoding(streamId);
-	const QString larixTemplate =
-		"larix://set/v1?conn[][name]=%1&conn[][url]=%2/&conn[][srtstreamid]=%3&conn[][srtlatency]=%4";
+	const QString encodedUrl = QUrl::toPercentEncoding(url);
+	QString link = QStringLiteral("larix://set/v1?conn[][name]=%1&conn[][url]=%2").arg(encodedName, encodedUrl);
 
-	return larixTemplate.arg(encodedName).arg(url).arg(encodedStreamId).arg(latencyMs);
+	if (!streamId.isEmpty()) {
+		const QString encodedStreamId = QUrl::toPercentEncoding(streamId);
+		link += QStringLiteral("&conn[][srtstreamid]=%1&conn[][srtlatency]=%2")
+				.arg(encodedStreamId, QString::number(latencyMs));
+	}
+
+	return link;
 }
 
 QPixmap getQrFromURL(const QString &url, qrcodegen::QrCode::Ecc errCorrection) {
