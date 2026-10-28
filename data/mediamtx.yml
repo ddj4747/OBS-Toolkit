@@ -1,7 +1,7 @@
 api: yes
 apiAddress: 127.0.0.1:9997
 srt: yes
-srtAddress: :8890
+srtAddress: 0.0.0.0:8890
 rtsp: yes
 rtspAddress: :8554
 rtpAddress: :8000

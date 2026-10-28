@@ -35,4 +35,4 @@ class ConanApplication(ConanFile):
         data = self.conan_data.get("requirements", {})
 
         for req in data.get("common", []):
-            self.requires(req)
+            self.requires(req, force=req.startswith("fmt/"))
