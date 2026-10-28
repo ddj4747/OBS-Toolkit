@@ -1,6 +1,5 @@
 #include <GoIRL_Process.h>
 
-
 #include <QByteArray>
 #include <spdlog/spdlog.h>
 #include <filesystem>
@@ -10,7 +9,8 @@
 static constexpr int c_stopTimeoutMs = 5000;
 
 GoIRL_Process::GoIRL_Process(const uint16_t port, const QString &executablePath)
-	: m_executablePath(executablePath), m_port(port) {
+	: m_executablePath(executablePath),
+	  m_port(port) {
 	QUdpSocket socket;
 	if (socket.bind(QHostAddress::AnyIPv4, 0))
 		m_localSrtPort = socket.localPort();
@@ -33,7 +33,6 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 		return;
 	}
 
-
 	if (m_localSrtPort == 0) {
 		spdlog::error("failed to allocate a local SRT port");
 		emit serverError(ServerError::FailedToStart);
@@ -46,7 +45,6 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 
 	m_listening = false;
 	m_stderrBuffer.clear();
-
 
 	m_stopRequested = false;
 	m_process = new QProcess(this);
@@ -61,10 +59,11 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 
 	const QString streamIdArgument = QString::fromUtf8(streamKey.data(), static_cast<qsizetype>(streamKey.size()));
 	spdlog::info("starting go-irl SRTLA on {}, local SRT on {}", m_port, m_localSrtPort);
-	m_process->start(m_executablePath, {QStringLiteral("-mode=server"), QStringLiteral("-cli"), QStringLiteral("-insecure"),
-				   QStringLiteral("-verbose"), QStringLiteral("-srtla-port=") + QString::number(m_port),
-				   QStringLiteral("-srt-port=") + QString::number(m_localSrtPort),
-				   QStringLiteral("-streamId=") + streamIdArgument});
+	m_process->start(m_executablePath,
+			 {QStringLiteral("-mode=server"), QStringLiteral("-cli"), QStringLiteral("-insecure"),
+			  QStringLiteral("-verbose"), QStringLiteral("-srtla-port=") + QString::number(m_port),
+			  QStringLiteral("-srt-port=") + QString::number(m_localSrtPort),
+			  QStringLiteral("-streamId=") + streamIdArgument});
 }
 
 uint16_t GoIRL_Process::localSrtPort() const {
@@ -137,7 +136,7 @@ void GoIRL_Process::onProcessFinished(const int exitCode, const QProcess::ExitSt
 	const bool listening = m_listening;
 	m_listening = false;
 	spdlog::log(requested ? spdlog::level::info : spdlog::level::err, "go-irl exited with code {} ({})", exitCode,
-		exitStatus == QProcess::NormalExit ? "normal exit" : "crashed");
+		    exitStatus == QProcess::NormalExit ? "normal exit" : "crashed");
 	cleanupProcess();
 
 	if (!listening && !requested) {

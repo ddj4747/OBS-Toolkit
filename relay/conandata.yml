@@ -1,0 +1,3 @@
+requirements:
+  common:
+    - "spdlog/1.16.0"

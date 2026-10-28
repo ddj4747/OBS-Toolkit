@@ -1,5 +1,6 @@
 #pragma once
 
+#include <RelayConfig.h>
 #include <QObject>
 #include <QProcess>
 #include <QString>
@@ -23,7 +24,8 @@ class MediamtxManager final : public QObject {
 public:
 	enum class ServerError { FailedToStart, IncorrectInput, Crashed };
 
-	explicit MediamtxManager(const QString &executablePath, const QString &configPath);
+	explicit MediamtxManager(const QString &executablePath, const QString &configPath,
+				 const RelayConfig &config = {});
 	MediamtxManager(const MediamtxManager &) = delete;
 	MediamtxManager &operator=(const MediamtxManager &) = delete;
 	MediamtxManager(MediamtxManager &&) = delete;
@@ -64,6 +66,7 @@ private:
 	static QString pathName(const std::string &streamId, StreamProtocol protocol);
 	void pollInputAvailability();
 
+	RelayConfig m_config;
 	QString m_executablePath;
 	QString m_configPath;
 	QProcess *m_process{nullptr};

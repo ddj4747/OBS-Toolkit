@@ -1,8 +1,10 @@
 #include <MediamtxManager.h>
+#include <MediaMtxConfig.h>
 
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QUrl>
+#include <QProcessEnvironment>
 #include <QVariant>
 #include <QByteArray>
 #include <QtNetwork/QNetworkReply>
@@ -13,8 +15,10 @@
 
 static constexpr int c_stopTimeoutMs = 5000;
 
-MediamtxManager::MediamtxManager(const QString &executablePath, const QString &configPath)
-	: m_executablePath(executablePath), m_configPath(configPath) {
+MediamtxManager::MediamtxManager(const QString &executablePath, const QString &configPath, const RelayConfig &config)
+	: m_config(config),
+	  m_executablePath(executablePath),
+	  m_configPath(configPath) {
 	m_networkAccessManager = new QNetworkAccessManager(this);
 	m_inputStatusTimer = new QTimer(this);
 	m_inputStatusTimer->setInterval(1000);
@@ -38,10 +42,21 @@ void MediamtxManager::startServer() {
 		return;
 	}
 
-
+	QString error;
+	if (!MediaMtxConfig::write(m_configPath, m_config, error)) {
+		spdlog::error("failed to write MediaMTX configuration: {}", error.toStdString());
+		emit serverError(ServerError::FailedToStart);
+		return;
+	}
 	m_stopRequested = false;
 	m_apiReady = false;
 	m_process = new QProcess(this);
+	QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+	for (const QString &name : environment.keys()) {
+		if (name.startsWith(QStringLiteral("MTX_"), Qt::CaseInsensitive))
+			environment.remove(name);
+	}
+	m_process->setProcessEnvironment(environment);
 	connect(m_process, &QProcess::started, this, &MediamtxManager::onProcessStarted);
 	connect(m_process, &QProcess::errorOccurred, this, &MediamtxManager::onProcessErrorOccurred);
 	connect(m_process, &QProcess::finished, this, &MediamtxManager::onProcessFinished);
@@ -96,7 +111,7 @@ void MediamtxManager::onProcessErrorOccurred(const QProcess::ProcessError error)
 void MediamtxManager::onProcessFinished(const int exitCode, const QProcess::ExitStatus exitStatus) {
 	const bool requested = m_stopRequested;
 	spdlog::log(requested ? spdlog::level::info : spdlog::level::err, "mediamtx exited with code {} ({})", exitCode,
-		exitStatus == QProcess::NormalExit ? "normal exit" : "crashed");
+		    exitStatus == QProcess::NormalExit ? "normal exit" : "crashed");
 	cleanupProcess();
 
 	if (requested) {
@@ -171,26 +186,28 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Strea
 
 	switch (protocol) {
 	case StreamProtocol::RTSP:
-		publishUrl = QString("rtsp://%1:8554/%2").arg(ipStr).arg(mediaPath);
+		publishUrl = QString("rtsp://%1:%2/%3").arg(ipStr).arg(m_config.rtspPort).arg(mediaPath);
 		break;
 	case StreamProtocol::RTMP:
-		publishUrl = QString("rtmp://%1:1935/%2").arg(ipStr).arg(mediaPath);
+		publishUrl = QString("rtmp://%1:%2/%3").arg(ipStr).arg(m_config.rtmpPort).arg(mediaPath);
 		break;
 	case StreamProtocol::SRT:
-		publishUrl = QString("srt://%1:8890?streamid=publish:%2").arg(ipStr).arg(encodedPathName);
+		publishUrl =
+			QString("srt://%1:%2?streamid=publish:%3").arg(ipStr).arg(m_config.srtPort).arg(encodedPathName);
 		break;
 	case StreamProtocol::WebRTC:
-		publishUrl = QString("http://%1:8889/%2/whip").arg(ipStr).arg(mediaPath);
+		publishUrl = QString("http://%1:%2/%3/whip").arg(ipStr).arg(m_config.webRtcPort).arg(mediaPath);
 		break;
 	case StreamProtocol::MoQ:
-		publishUrl = QString("https://%1:8892/%2/publish").arg(ipStr).arg(mediaPath);
+		publishUrl = QString("https://%1:%2/%3/publish").arg(ipStr).arg(m_config.moqPort).arg(mediaPath);
 		break;
 	default:
 		emit inputError(qname, QStringLiteral("Unsupported protocol"));
 		return;
 	}
 
-	const QUrl requestUrl = QString("http://127.0.0.1:9997/v3/config/paths/add/%1").arg(encodedPathName);
+	const QUrl requestUrl =
+		QString("http://127.0.0.1:%1/v3/config/paths/add/%2").arg(MediaMtxConfig::apiPort).arg(encodedPathName);
 
 	QNetworkRequest request(requestUrl);
 	request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -204,7 +221,7 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Strea
 						      ? reply->errorString()
 						      : QStringLiteral("HTTP %1").arg(status.toInt());
 			spdlog::error("failed to add MediaMTX input '{}': {}", qUtf8Printable(qname),
-				qUtf8Printable(error));
+				      qUtf8Printable(error));
 			emit inputError(qname, error);
 		} else {
 			m_inputs.insert_or_assign(streamId, std::make_pair(protocol, false));
@@ -227,7 +244,9 @@ void MediamtxManager::removeInput(const std::string &name, const StreamProtocol 
 	}
 
 	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(pathName(name, protocol)));
-	const QUrl requestUrl = QString("http://127.0.0.1:9997/v3/config/paths/delete/%1").arg(encodedPathName);
+	const QUrl requestUrl = QString("http://127.0.0.1:%1/v3/config/paths/delete/%2")
+					.arg(MediaMtxConfig::apiPort)
+					.arg(encodedPathName);
 
 	QNetworkRequest request(requestUrl);
 	request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -240,7 +259,7 @@ void MediamtxManager::removeInput(const std::string &name, const StreamProtocol 
 						      ? reply->errorString()
 						      : QStringLiteral("HTTP %1").arg(status.toInt());
 			spdlog::error("failed to remove MediaMTX input '{}': {}", qUtf8Printable(qname),
-				qUtf8Printable(error));
+				      qUtf8Printable(error));
 			emit inputError(qname, error);
 		} else {
 			emit inputRemoved(qname);
@@ -254,12 +273,15 @@ void MediamtxManager::pollInputAvailability() {
 		return;
 	}
 
-	for (const auto &[streamId, input] : m_inputs) {
-		const QString path = QString::fromLatin1(QUrl::toPercentEncoding(pathName(streamId, input.first)));
-		QNetworkReply *reply = m_networkAccessManager->get(
-			QNetworkRequest(QString("http://127.0.0.1:9997/v3/paths/get/%1").arg(path)));
+	for (const std::pair<const std::string, std::pair<StreamProtocol, bool>> &entry : m_inputs) {
+		const std::string &streamId = entry.first;
+		const QString path =
+			QString::fromLatin1(QUrl::toPercentEncoding(pathName(streamId, entry.second.first)));
+		QNetworkReply *reply = m_networkAccessManager->get(QNetworkRequest(
+			QString("http://127.0.0.1:%1/v3/paths/get/%2").arg(MediaMtxConfig::apiPort).arg(path)));
 		connect(reply, &QNetworkReply::finished, this, [this, reply, streamId]() {
-			const auto input = m_inputs.find(streamId);
+			const std::map<std::string, std::pair<StreamProtocol, bool>>::iterator input =
+				m_inputs.find(streamId);
 			if (input == m_inputs.end()) {
 				reply->deleteLater();
 				return;

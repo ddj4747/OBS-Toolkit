@@ -1,3 +1,10 @@
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  cmake_minimum_required(VERSION 3.28)
+  project(obs_relay LANGUAGES CXX)
+  find_package(Qt6 REQUIRED COMPONENTS Core Network)
+  find_package(spdlog REQUIRED)
+endif()
+
 file(
   GLOB_RECURSE RELAY_SOURCES
   CONFIGURE_DEPENDS
@@ -26,10 +33,18 @@ foreach(_dependency IN ITEMS go-irl mediamtx)
   if(NOT EXISTS "${_binary}")
     message(FATAL_ERROR "${_binary} is missing. Run configure.py to install relay dependencies.")
   endif()
-  add_custom_command(TARGET relay_server POST_BUILD
+  add_custom_command(
+    TARGET relay_server
+    POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_binary}" "$<TARGET_FILE_DIR:relay_server>"
-    VERBATIM)
+    VERBATIM
+  )
 endforeach()
-add_custom_command(TARGET relay_server POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/data/mediamtx.yml" "$<TARGET_FILE_DIR:relay_server>"
-  VERBATIM)
+
+add_custom_target(
+  relay_docker_image
+  COMMAND docker build --tag obs-relay "${CMAKE_CURRENT_SOURCE_DIR}"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  USES_TERMINAL
+  VERBATIM
+)
