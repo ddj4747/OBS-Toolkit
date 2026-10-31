@@ -48,7 +48,7 @@ bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &p
 	}
 	if (error) {
 		std::fprintf(stderr, "CertificateManager: failed to create directory for '%s' (%s)",
-			displayPath(path).c_str(), error.message().c_str());
+			     displayPath(path).c_str(), error.message().c_str());
 		return false;
 	}
 

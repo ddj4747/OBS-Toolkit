@@ -1,8 +1,6 @@
-#include <RelayConfig.h>
 #include <API_Endpoint.h>
 #include <QCommandLineParser>
 #include <QCoreApplication>
-#include <QDir>
 #include <QTextStream>
 
 int main(int argc, char **argv) {
@@ -43,14 +41,6 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	RelayConfig config;
-
-	const QString configPath = QDir(configDirectory).filePath(QStringLiteral("relay-config.json"));
-	if (!RelayConfig::load(configPath, config, error)) {
-		QTextStream(stderr) << "Failed to load relay configuration: " << error << Qt::endl;
-		return 1;
-	}
-
 	API_Endpoint &api = API_Endpoint::getInstance();
 #ifdef _WIN32
 	const std::filesystem::path apiDirectory(configDirectory.toStdWString());
@@ -58,7 +48,7 @@ int main(int argc, char **argv) {
 	const std::filesystem::path apiDirectory(configDirectory.toStdString());
 #endif
 
-	if (!api.start(apiDirectory, config.apiPort)) {
+	if (!api.start(apiDirectory, RELAY_API_PORT)) {
 		QTextStream(stderr) << "Failed to start relay API server" << Qt::endl;
 		return 1;
 	}

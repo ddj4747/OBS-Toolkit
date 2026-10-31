@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 from api_tester import format_body
 
 
-PROTOCOLS = ("SRT", "SRTLA", "RTSP", "RTMP", "WebRTC", "MoQ", "HLS", "MPEGTS", "RTP")
+PROTOCOLS = ("SRT", "SRTLA", "RTSP", "RTMP", "WebRTC", "MoQ")
 
 
 def send_request(method, url, key, protocol, stream_key):
@@ -71,8 +71,9 @@ class RelayApiTester(tk.Tk):
 
 		buttons = ttk.LabelFrame(self, text="Endpoints", padding=8)
 		buttons.pack(fill="x", padx=8, pady=4)
-		for method, label in (("POST", "Create feed"), ("DELETE", "Delete feed"), ("GET", "List feeds")):
-			ttk.Button(buttons, text=label, command=lambda selected=method: self.send(selected)).pack(
+		for method, path, label in (("POST", "/feeds", "Create feed"), ("DELETE", "/feeds", "Delete feed"),
+						("GET", "/feeds", "List feeds"), ("GET", "/status", "Server status")):
+			ttk.Button(buttons, text=label, command=lambda selected=method, route=path: self.send(selected, route)).pack(
 				side="left", padx=(0, 8)
 			)
 
@@ -85,10 +86,10 @@ class RelayApiTester(tk.Tk):
 		self.response.pack(side="left", fill="both", expand=True)
 		scroll.pack(side="right", fill="y")
 
-	def send(self, method):
+	def send(self, method, path):
 		host = self.host.get().strip()
 		port = self.port.get().strip()
-		url = f"https://{host}:{port}/feeds"
+		url = f"https://{host}:{port}{path}"
 		args = (method, url, self.access_key.get(), self.protocol.get(), self.stream_key.get())
 		self.status.set(f"Sending {method} {url}")
 		threading.Thread(target=self._request, args=args, daemon=True).start()

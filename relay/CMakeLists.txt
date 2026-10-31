@@ -8,6 +8,39 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common" "${CMAKE_CURRENT_BINARY_DIR}/common")
 endif()
 
+set(RELAY_API_PORT 8080 CACHE STRING "Relay HTTPS API port")
+set(RELAY_SRTLA_PORT 5000 CACHE STRING "Relay SRTLA port")
+set(RELAY_SRT_PORT 8890 CACHE STRING "Relay SRT port")
+set(RELAY_RTSP_PORT 8554 CACHE STRING "Relay RTSP port")
+set(RELAY_RTP_PORT 8000 CACHE STRING "Relay RTP port")
+set(RELAY_RTCP_PORT 8001 CACHE STRING "Relay RTCP port")
+set(RELAY_RTMP_PORT 1935 CACHE STRING "Relay RTMP port")
+set(RELAY_WEBRTC_PORT 8889 CACHE STRING "Relay WebRTC port")
+set(RELAY_MOQ_PORT 8892 CACHE STRING "Relay MoQ port")
+set(RELAY_MOQ_QUIC_PORT 8893 CACHE STRING "Relay MoQ QUIC port")
+
+set(
+  RELAY_PORT_OPTIONS
+  API
+  SRTLA
+  SRT
+  RTSP
+  RTP
+  RTCP
+  RTMP
+  WEBRTC
+  MOQ
+  MOQ_QUIC
+)
+foreach(_name IN LISTS RELAY_PORT_OPTIONS)
+  set(_variable "RELAY_${_name}_PORT")
+  if(NOT "${${_variable}}" MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR "${_variable} must be an integer between 1 and 65535")
+  elseif("${${_variable}}" GREATER 65535)
+    message(FATAL_ERROR "${_variable} must be an integer between 1 and 65535")
+  endif()
+endforeach()
+
 file(
   GLOB_RECURSE RELAY_SOURCES
   CONFIGURE_DEPENDS
@@ -23,8 +56,14 @@ file(
   "${CMAKE_CURRENT_SOURCE_DIR}/inc/*.hpp"
 )
 add_executable(relay_server ${RELAY_SOURCES} ${RELAY_HEADERS})
+foreach(_name IN LISTS RELAY_PORT_OPTIONS)
+  target_compile_definitions(relay_server PRIVATE "RELAY_${_name}_PORT=${RELAY_${_name}_PORT}")
+endforeach()
 target_include_directories(relay_server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/inc")
-target_link_libraries(relay_server PRIVATE Qt6::Core Qt6::Network spdlog::spdlog httplib::httplib toolkit_common)
+target_link_libraries(
+  relay_server
+  PRIVATE Qt6::Core Qt6::Network spdlog::spdlog httplib::httplib toolkit_common
+)
 target_compile_features(relay_server PRIVATE cxx_std_20)
 set_target_properties(relay_server PROPERTIES AUTOMOC ON OUTPUT_NAME obs-relay)
 

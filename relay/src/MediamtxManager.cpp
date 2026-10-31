@@ -15,9 +15,8 @@
 
 static constexpr int c_stopTimeoutMs = 5000;
 
-MediamtxManager::MediamtxManager(const QString &executablePath, const QString &configPath, const RelayConfig &config)
-	: m_config(config),
-	  m_executablePath(executablePath),
+MediamtxManager::MediamtxManager(const QString &executablePath, const QString &configPath)
+	: m_executablePath(executablePath),
 	  m_configPath(configPath) {
 	m_networkAccessManager = new QNetworkAccessManager(this);
 	m_inputStatusTimer = new QTimer(this);
@@ -45,7 +44,7 @@ void MediamtxManager::startServer() {
 
 	QString error;
 
-	if (!MediaMtxConfig::write(m_configPath, m_config, error)) {
+	if (!MediaMtxConfig::write(m_configPath, error)) {
 		spdlog::error("failed to write MediaMTX configuration: {}", error.toStdString());
 		emit serverError(ServerError::FailedToStart);
 		return;
@@ -186,6 +185,34 @@ QString MediamtxManager::pathName(const std::string &streamId, const StreamProto
 	return protocol == StreamProtocol::RTMP ? QStringLiteral("app/%1").arg(name) : name;
 }
 
+QString MediamtxManager::publishLink(const std::string &streamId, const StreamProtocol protocol,
+				     const std::string &host) {
+	const QString mediaPath = pathName(streamId, protocol);
+	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(mediaPath));
+	const QString hostName = QString::fromStdString(host);
+	const QString address = hostName.contains(QLatin1Char(':')) ? QStringLiteral("[%1]").arg(hostName) : hostName;
+
+	switch (protocol) {
+	case StreamProtocol::RTSP:
+		return QString("rtsp://%1:%2/%3").arg(address).arg(RELAY_RTSP_PORT).arg(encodedPathName);
+	case StreamProtocol::RTMP:
+		return QString("rtmp://%1:%2/app/%3")
+			.arg(address)
+			.arg(RELAY_RTMP_PORT)
+			.arg(QString::fromLatin1(QUrl::toPercentEncoding(QString::fromStdString(streamId))));
+	case StreamProtocol::SRT:
+		return QString("srt://%1:%2?streamid=publish:%3").arg(address).arg(RELAY_SRT_PORT).arg(encodedPathName);
+	case StreamProtocol::WebRTC:
+		return QString("http://%1:%2/%3/whip").arg(address).arg(RELAY_WEBRTC_PORT).arg(encodedPathName);
+	case StreamProtocol::MoQ:
+		return QString("https://%1:%2/%3/publish").arg(address).arg(RELAY_MOQ_PORT).arg(encodedPathName);
+	case StreamProtocol::SRTLA:
+		return QString("srtla://%1:%2").arg(address).arg(RELAY_SRTLA_PORT);
+	default:
+		return {};
+	}
+}
+
 void MediamtxManager::addInputWhenReady(const std::string &streamId, const StreamProtocol protocol,
 					const std::string &ip) {
 	const QString qname = QString::fromStdString(streamId);
@@ -193,29 +220,10 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Strea
 
 	body["source"] = "publisher";
 
-	QString publishUrl;
-	const QString mediaPath = pathName(streamId, protocol);
-	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(mediaPath));
-	const QString ipStr = QString::fromStdString(ip);
+	const QString publishUrl = publishLink(streamId, protocol, ip);
+	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(pathName(streamId, protocol)));
 
-	switch (protocol) {
-	case StreamProtocol::RTSP:
-		publishUrl = QString("rtsp://%1:%2/%3").arg(ipStr).arg(m_config.rtspPort).arg(mediaPath);
-		break;
-	case StreamProtocol::RTMP:
-		publishUrl = QString("rtmp://%1:%2/%3").arg(ipStr).arg(m_config.rtmpPort).arg(mediaPath);
-		break;
-	case StreamProtocol::SRT:
-		publishUrl =
-			QString("srt://%1:%2?streamid=publish:%3").arg(ipStr).arg(m_config.srtPort).arg(encodedPathName);
-		break;
-	case StreamProtocol::WebRTC:
-		publishUrl = QString("http://%1:%2/%3/whip").arg(ipStr).arg(m_config.webRtcPort).arg(mediaPath);
-		break;
-	case StreamProtocol::MoQ:
-		publishUrl = QString("https://%1:%2/%3/publish").arg(ipStr).arg(m_config.moqPort).arg(mediaPath);
-		break;
-	default:
+	if (publishUrl.isEmpty() || protocol == StreamProtocol::SRTLA) {
 		emit inputError(qname, QStringLiteral("Unsupported protocol"));
 		return;
 	}
