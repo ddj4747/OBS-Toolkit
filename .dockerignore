@@ -1,0 +1,8 @@
+**
+!common/
+!common/**
+!relay/
+!relay/**
+relay/.deps/
+relay/build/
+relay/__pycache__/

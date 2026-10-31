@@ -5,14 +5,15 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
-COPY conanfile.py conandata.yml ./
+COPY relay/conanfile.py relay/conandata.yml ./
 RUN python3 -m venv /opt/conan \
     && /opt/conan/bin/pip install conan==2.34.0 \
     && /opt/conan/bin/conan profile detect \
     && /opt/conan/bin/conan install . --output-folder=/deps --build=missing \
        -s build_type=Release -s compiler.cppstd=20
 
-COPY . .
+COPY common /common
+COPY relay/ .
 ARG TARGETARCH
 RUN python3 download_dependencies.py "$TARGETARCH" .deps
 RUN cmake -S . -B /build -DCMAKE_BUILD_TYPE=Release \

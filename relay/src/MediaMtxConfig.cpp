@@ -17,16 +17,22 @@ bool MediaMtxConfig::write(const QString &path, const RelayConfig &config, QStri
 			.arg(config.webRtcPort)
 			.arg(config.moqPort)
 			.arg(config.moqQuicPort);
+
 	QSaveFile file(path);
+
 	if (!file.open(QIODevice::WriteOnly)) {
 		error = file.errorString();
 		return false;
 	}
+
 	const QByteArray data = contents.toUtf8();
+
 	if (file.write(data) != data.size() || !file.commit()) {
 		error = file.errorString();
 		return false;
 	}
+
 	error.clear();
+
 	return true;
 }

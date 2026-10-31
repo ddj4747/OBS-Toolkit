@@ -3,6 +3,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(obs_relay LANGUAGES CXX)
   find_package(Qt6 REQUIRED COMPONENTS Core Network)
   find_package(spdlog REQUIRED)
+  find_package(httplib REQUIRED)
+  find_package(OpenSSL REQUIRED)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common" "${CMAKE_CURRENT_BINARY_DIR}/common")
 endif()
 
 file(
@@ -21,7 +24,7 @@ file(
 )
 add_executable(relay_server ${RELAY_SOURCES} ${RELAY_HEADERS})
 target_include_directories(relay_server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/inc")
-target_link_libraries(relay_server PRIVATE Qt6::Core Qt6::Network spdlog::spdlog)
+target_link_libraries(relay_server PRIVATE Qt6::Core Qt6::Network spdlog::spdlog httplib::httplib toolkit_common)
 target_compile_features(relay_server PRIVATE cxx_std_20)
 set_target_properties(relay_server PROPERTIES AUTOMOC ON OUTPUT_NAME obs-relay)
 
@@ -43,7 +46,7 @@ endforeach()
 
 add_custom_target(
   relay_docker_image
-  COMMAND docker build --tag obs-relay "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMAND docker build --tag obs-relay -f "${CMAKE_CURRENT_SOURCE_DIR}/Dockerfile" "${CMAKE_CURRENT_SOURCE_DIR}/.."
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   USES_TERMINAL
   VERBATIM

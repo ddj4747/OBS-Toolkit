@@ -24,6 +24,7 @@ target_link_libraries(
     Qt6::Network
     OBS::libobs
     plugin_common
+    toolkit_common
     FFmpeg::avcodec
     FFmpeg::avformat
     FFmpeg::avutil

@@ -46,6 +46,7 @@ if(OS_WINDOWS)
   unset(_imported_targets)
 endif()
 
+add_subdirectory(common)
 add_subdirectory(relay)
 add_subdirectory(plugin/backend)
 add_subdirectory(plugin/common)

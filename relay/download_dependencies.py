@@ -1,9 +1,17 @@
 import argparse
 import io
-from pathlib import Path
+import platform
+import sys
 import tarfile
 import urllib.request
 import zipfile
+from pathlib import Path
+
+
+RELEASES = {
+    "go-irl": ("ddj4747/go-irl", "v1.1.1"),
+    "mediamtx": ("bluenviron/mediamtx", "v1.20.1"),
+}
 
 
 def download(url):
@@ -11,8 +19,8 @@ def download(url):
         return io.BytesIO(response.read())
 
 
-def install_binary(data, name, destination):
-    if name == "go-irl":
+def install_binary(data, name, destination, archive_name):
+    if archive_name.endswith(".zip"):
         with zipfile.ZipFile(data) as archive:
             matches = [entry for entry in archive.namelist() if Path(entry).name == name]
             if len(matches) != 1:
@@ -23,10 +31,41 @@ def install_binary(data, name, destination):
             matches = [entry for entry in archive.getmembers() if entry.isfile() and Path(entry.name).name == name]
             if len(matches) != 1:
                 raise RuntimeError(f"Expected one {name} binary in archive")
-            content = archive.extractfile(matches[0]).read()
+            with archive.extractfile(matches[0]) as binary:
+                content = binary.read()
     path = destination / name
     path.write_bytes(content)
-    path.chmod(0o755)
+    if not name.endswith(".exe"):
+        path.chmod(0o755)
+    print(f"Installed {name} to {path}")
+
+
+def install_dependencies(destination, target_platform=None, architecture=None):
+    target_platform = target_platform or sys.platform
+    machine = (architecture or platform.machine()).lower()
+    arch = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}.get(machine)
+    if target_platform == "win32":
+        system, arch = "windows", "amd64"
+    elif target_platform == "darwin":
+        system, arch = "darwin", "arm64"
+    elif target_platform.startswith("linux") and arch:
+        system = "linux"
+    else:
+        raise ValueError(f"Unsupported platform or architecture: {target_platform}, {machine}")
+
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, (repository, version) in RELEASES.items():
+        if name == "go-irl":
+            go_system = "macos" if system == "darwin" else system
+            go_arch = "x64" if arch == "amd64" else "arm64"
+            asset = f"go-irl-{go_system}-{go_arch}.zip"
+        else:
+            extension = "zip" if system == "windows" else "tar.gz"
+            asset = f"mediamtx_{version}_{system}_{arch}.{extension}"
+        url = f"https://github.com/{repository}/releases/download/{version}/{asset}"
+        executable = name + (".exe" if system == "windows" else "")
+        install_binary(download(url), executable, destination, asset)
 
 
 def main():
@@ -34,12 +73,7 @@ def main():
     parser.add_argument("architecture", choices=("amd64", "arm64"))
     parser.add_argument("destination", type=Path)
     args = parser.parse_args()
-    args.destination.mkdir(parents=True, exist_ok=True)
-    go_arch = "x64" if args.architecture == "amd64" else "arm64"
-    go_url = f"https://github.com/ddj4747/go-irl/releases/download/v1.1.1/go-irl-linux-{go_arch}.zip"
-    media_url = f"https://github.com/bluenviron/mediamtx/releases/download/v1.20.1/mediamtx_v1.20.1_linux_{args.architecture}.tar.gz"
-    install_binary(download(go_url), "go-irl", args.destination)
-    install_binary(download(media_url), "mediamtx", args.destination)
+    install_dependencies(args.destination, target_platform="linux", architecture=args.architecture)
 
 
 if __name__ == "__main__":

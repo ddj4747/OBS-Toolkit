@@ -1,6 +1,6 @@
 #include <CertificateManager.h>
 
-#include <plugin-support.h>
+#include <cstdio>
 
 #include <openssl/bn.h>
 #include <openssl/err.h>
@@ -38,7 +38,7 @@ bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &p
 	char *data = nullptr;
 	const long size = BIO_get_mem_data(bio, &data);
 	if (size < 0 || (size > 0 && !data)) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to read PEM buffer (%s)", openSSLError().c_str());
+		std::fprintf(stderr, "CertificateManager: failed to read PEM buffer (%s)", openSSLError().c_str());
 		return false;
 	}
 
@@ -47,20 +47,20 @@ bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &p
 		std::filesystem::create_directories(path.parent_path(), error);
 	}
 	if (error) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to create directory for '%s' (%s)",
+		std::fprintf(stderr, "CertificateManager: failed to create directory for '%s' (%s)",
 			displayPath(path).c_str(), error.message().c_str());
 		return false;
 	}
 
 	std::ofstream file(path, std::ios::binary | std::ios::trunc);
 	if (!file) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to open '%s' for writing", displayPath(path).c_str());
+		std::fprintf(stderr, "CertificateManager: failed to open '%s' for writing", displayPath(path).c_str());
 		return false;
 	}
 
 	file.write(data, size);
 	if (!file) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to write '%s'", displayPath(path).c_str());
+		std::fprintf(stderr, "CertificateManager: failed to write '%s'", displayPath(path).c_str());
 		return false;
 	}
 
@@ -99,7 +99,7 @@ bool CertificateManager::setSubjectAndIssuer(X509 *certificate) {
 						  reinterpret_cast<const unsigned char *>(value), -1, -1, 0) == 1;
 	};
 
-	return addEntry("C", "PL") && addEntry("O", PLUGIN_NAME) && addEntry("CN", "localhost") &&
+	return addEntry("C", "PL") && addEntry("O", "OBS Toolkit") && addEntry("CN", "localhost") &&
 	       X509_set_subject_name(certificate, name.get()) == 1 &&
 	       X509_set_issuer_name(certificate, name.get()) == 1;
 }
@@ -130,7 +130,7 @@ bool CertificateManager::generateCertificate(const std::filesystem::path &privat
 
 	const EvpPkeyPtr privateKey(EVP_EC_gen("P-256"), EVP_PKEY_free);
 	if (!privateKey) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to generate EC key (%s)", openSSLError().c_str());
+		std::fprintf(stderr, "CertificateManager: failed to generate EC key (%s)", openSSLError().c_str());
 		return false;
 	}
 
@@ -140,12 +140,12 @@ bool CertificateManager::generateCertificate(const std::filesystem::path &privat
 	    !X509_gmtime_adj(X509_getm_notAfter(certificate.get()), CERTIFICATE_LIFETIME_SECONDS) ||
 	    X509_set_pubkey(certificate.get(), privateKey.get()) != 1 || !setSubjectAndIssuer(certificate.get()) ||
 	    !addCaBasicConstraints(certificate.get())) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to build certificate (%s)", openSSLError().c_str());
+		std::fprintf(stderr, "CertificateManager: failed to build certificate (%s)", openSSLError().c_str());
 		return false;
 	}
 
 	if (X509_sign(certificate.get(), privateKey.get(), EVP_sha256()) <= 0) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to sign certificate (%s)", openSSLError().c_str());
+		std::fprintf(stderr, "CertificateManager: failed to sign certificate (%s)", openSSLError().c_str());
 		return false;
 	}
 
@@ -154,7 +154,7 @@ bool CertificateManager::generateCertificate(const std::filesystem::path &privat
 	if (!keyBio || !certificateBio ||
 	    PEM_write_bio_PrivateKey(keyBio.get(), privateKey.get(), nullptr, nullptr, 0, nullptr, nullptr) != 1 ||
 	    PEM_write_bio_X509(certificateBio.get(), certificate.get()) != 1) {
-		obs_log(LOG_ERROR, "CertificateManager: failed to encode PEM (%s)", openSSLError().c_str());
+		std::fprintf(stderr, "CertificateManager: failed to encode PEM (%s)", openSSLError().c_str());
 		return false;
 	}
 
