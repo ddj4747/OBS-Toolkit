@@ -111,7 +111,6 @@ private:
 	static constexpr const char *c_qrNamePrefix = "pluginSourceQr";
 
 	NO_DISCARD std::vector<ForwardingConfig> forwardingConfigs();
-	void releaseReservedSrtlaPort();
 	static void deleteOnOwningThread(QObject *object);
 	void copySettingToClipboard(const char *key) const;
 	static bool onCopyStreamIdClicked(obs_properties_t *props, obs_property_t *property, void *data);
@@ -130,7 +129,6 @@ private:
 	StreamProtocol m_protocol{};
 
 	std::vector<PortForwarder *> m_portForwarders;
-	uint16_t m_reservedSrtlaPort{0};
 	SRT_FrameReceiver *m_frameReceiver{nullptr};
 	mutable std::mutex m_frameReceiverMutex;
 	StreamHandler *m_streamHandler{nullptr};

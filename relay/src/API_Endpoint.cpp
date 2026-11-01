@@ -111,6 +111,11 @@ bool API_Endpoint::start(const std::filesystem::path &configDirectory, const uin
 		QHostAddress ipAddress;
 
 		if (ipAddress.setAddress(configuredHost)) {
+			if (!ipAddress.scopeId().isEmpty()) {
+				spdlog::error("RELAY_PUBLIC_HOST must not include an IPv6 scope");
+				return false;
+			}
+
 			m_publicHost = ipAddress.toString().toStdString();
 		} else {
 			const QUrl publicUrl(QStringLiteral("https://") + configuredHost);
@@ -135,7 +140,8 @@ bool API_Endpoint::start(const std::filesystem::path &configDirectory, const uin
 	const std::filesystem::path keyPath = configDirectory / "key.pem";
 	const std::filesystem::path certPath = configDirectory / "cert.pem";
 
-	if ((!CertificateManager::isCertificateValid(certPath) || !CertificateManager::isPrivateKeyValid(keyPath)) &&
+	if ((!CertificateManager::isCertificateValid(certPath) || !CertificateManager::isPrivateKeyValid(keyPath) ||
+	     !CertificateManager::keysMatch(keyPath, certPath)) &&
 	    !CertificateManager::generateCertificate(keyPath, certPath)) {
 		spdlog::error("Failed to generate relay API certificate");
 		return false;

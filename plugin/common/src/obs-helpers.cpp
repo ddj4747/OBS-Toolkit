@@ -112,6 +112,7 @@ QIcon getIconFromPath(const QString &path) {
 std::vector<std::pair<uint64_t, std::function<void(calldata_t *cd)>>> s_callbacks;
 uint64_t s_currentId = 1;
 std::mutex s_callbacksMutex;
+std::mutex s_signalRegistrationMutex;
 
 void onSourceListChange(void *, calldata_t *cd) {
 	std::lock_guard<std::mutex> lock(s_callbacksMutex);
@@ -125,25 +126,31 @@ void disconnectSourceEditSignals(const uint64_t id) {
 		return;
 	}
 
-	std::lock_guard<std::mutex> lock(s_callbacksMutex);
-	auto it = s_callbacks.begin();
-	bool found = false;
+	std::lock_guard<std::mutex> registrationLock(s_signalRegistrationMutex);
+	bool disconnectSignals = false;
+	{
+		std::lock_guard<std::mutex> lock(s_callbacksMutex);
+		std::vector<std::pair<uint64_t, std::function<void(calldata_t *)>>>::iterator it = s_callbacks.begin();
+		bool found = false;
 
-	while (it != s_callbacks.end()) {
-		if (it->first == id) {
-			s_callbacks.erase(it);
-			found = true;
-			break;
+		while (it != s_callbacks.end()) {
+			if (it->first == id) {
+				s_callbacks.erase(it);
+				found = true;
+				break;
+			}
+
+			++it;
 		}
 
-		++it;
+		if (!found) {
+			return;
+		}
+
+		disconnectSignals = s_callbacks.empty();
 	}
 
-	if (!found) {
-		return;
-	}
-
-	if (s_callbacks.empty()) {
+	if (disconnectSignals) {
 		signal_handler_t *handler = obs_get_signal_handler();
 		if (!handler) {
 			return;
@@ -156,11 +163,18 @@ void disconnectSourceEditSignals(const uint64_t id) {
 }
 
 uint64_t connectSourceEditSignals(std::function<void(calldata_t *cd)> callback) {
-	std::lock_guard<std::mutex> lock(s_callbacksMutex);
-	s_callbacks.emplace_back(s_currentId, std::move(callback));
-	s_currentId++;
+	std::lock_guard<std::mutex> registrationLock(s_signalRegistrationMutex);
+	uint64_t id;
+	bool connectSignals;
 
-	if (s_callbacks.size() == 1) {
+	{
+		std::lock_guard<std::mutex> lock(s_callbacksMutex);
+		id = s_currentId++;
+		s_callbacks.emplace_back(id, std::move(callback));
+		connectSignals = s_callbacks.size() == 1;
+	}
+
+	if (connectSignals) {
 		signal_handler_t *handler = obs_get_signal_handler();
 		assert(handler);
 
@@ -169,7 +183,7 @@ uint64_t connectSourceEditSignals(std::function<void(calldata_t *cd)> callback) 
 		signal_handler_connect(handler, "source_rename", onSourceListChange, nullptr);
 	}
 
-	return s_currentId - 1;
+	return id;
 }
 
 } // namespace obs_helpers

@@ -12,15 +12,28 @@
 
 #include <cstring>
 #include <functional>
+#include <util/platform.h>
+#include <util/bmem.h>
 
 void API_Endpoint::runOnUiThread(const std::function<void()> &function) {
+	if (getInstance().m_stopping.load()) {
+		return;
+	}
+
 	QCoreApplication *app = QCoreApplication::instance();
 	if (!app || QThread::currentThread() == app->thread()) {
 		function();
 		return;
 	}
 
-	QMetaObject::invokeMethod(app, function, Qt::BlockingQueuedConnection);
+	QMetaObject::invokeMethod(
+		app,
+		[&function] {
+			if (!getInstance().m_stopping.load()) {
+				function();
+			}
+		},
+		Qt::BlockingQueuedConnection);
 }
 
 API_Endpoint &API_Endpoint::getInstance() {
@@ -29,6 +42,8 @@ API_Endpoint &API_Endpoint::getInstance() {
 }
 
 bool API_Endpoint::start() {
+	m_stopping = false;
+
 	const char *dataPathRaw = obs_get_module_data_path(obs_current_module());
 	if (!dataPathRaw) {
 		obs_log(LOG_ERROR, "Plugin data folder wasn't found.");
@@ -39,17 +54,51 @@ bool API_Endpoint::start() {
 	const std::filesystem::path keyPath(dataPath / "key.pem");
 	const std::filesystem::path certPath(dataPath / "cert.pem");
 
-	if (!CertificateManager::isCertificateValid(certPath) || !CertificateManager::isPrivateKeyValid(keyPath)) {
+	if (!CertificateManager::isCertificateValid(certPath) || !CertificateManager::isPrivateKeyValid(keyPath) ||
+	    !CertificateManager::keysMatch(keyPath, certPath)) {
 		if (!CertificateManager::generateCertificate(keyPath, certPath)) {
 			return false;
 		}
 	}
 
-	const QUuid uuid = QUuid::createUuid();
+	char *configDir = obs_module_config_path("");
+	if (configDir) {
+		os_mkdirs(configDir);
+		bfree(configDir);
+	}
+
+	char *settingsPath = obs_module_config_path(QString("%1_config.json").arg(PLUGIN_NAME).toUtf8().constData());
+	if (!settingsPath) {
+		return false;
+	}
+
+	obs_data_t *settings = obs_data_create_from_json_file(settingsPath);
+	if (!settings) {
+		settings = obs_data_create();
+	}
+
+	obs_data_set_default_bool(settings, "webPanelEnabled", true);
+	QString accessKey = QString::fromUtf8(obs_data_get_string(settings, "webPanelAccessKey"));
+
+	if (accessKey.isEmpty()) {
+		accessKey = QUuid::createUuid().toString(QUuid::WithoutBraces);
+		obs_data_set_string(settings, "webPanelAccessKey", accessKey.toUtf8().constData());
+
+		if (!obs_data_save_json_safe(settings, settingsPath, "tmp", "bak")) {
+			obs_data_release(settings);
+			bfree(settingsPath);
+			return false;
+		}
+	}
+
 	{
 		std::lock_guard<std::mutex> lock(m_authMutex);
-		m_accessKey = obs_helpers::toStdString(uuid.toString());
+		m_accessKey = obs_helpers::toStdString(accessKey);
+		m_enabled = obs_data_get_bool(settings, "webPanelEnabled");
 	}
+
+	obs_data_release(settings);
+	bfree(settingsPath);
 
 	m_server = std::make_unique<httplib::SSLServer>(certPath.string().c_str(), keyPath.string().c_str());
 	if (!m_server->is_valid()) {
@@ -67,16 +116,30 @@ bool API_Endpoint::start() {
 	m_portForwarder = std::make_unique<PortForwarder>(getPort(), PortForwarder::Protocol::TCP);
 	m_portForwarder->forward();
 
-	m_httpThread = std::thread([this] { m_server->listen_after_bind(); });
+	m_httpExited = false;
+	m_httpThread = std::thread([this] {
+		m_server->listen_after_bind();
+		m_httpExited = true;
+	});
 
 	return true;
 }
 
 void API_Endpoint::stop() {
+	m_stopping = true;
+
 	if (m_server) {
 		m_server->stop();
 	}
+
 	if (m_httpThread.joinable()) {
+		QCoreApplication *app = QCoreApplication::instance();
+
+		while (app && QThread::currentThread() == app->thread() && !m_httpExited.load()) {
+			QCoreApplication::processEvents();
+			QThread::msleep(1);
+		}
+
 		m_httpThread.join();
 	}
 }
@@ -95,7 +158,7 @@ bool API_Endpoint::authorize(const httplib::Request &req, httplib::Response &res
 		return false;
 	}
 
-	if (req.get_header_value("Authorization") != accessKey) {
+	if (accessKey.empty() || req.get_header_value("Authorization") != accessKey) {
 		res.status = 401;
 		return false;
 	}

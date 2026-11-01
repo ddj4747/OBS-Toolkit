@@ -686,8 +686,9 @@ bool SRT_FrameReceiver::openStream() {
 	av_dict_set(&options, "listen_timeout", "5000000", 0);
 	av_dict_set(&options, "rw_timeout", "20000000", 0);
 	av_dict_set(&options, "transtype", "live", 0);
+	av_dict_set(&options, "streamid", m_streamID.c_str(), 0);
 
-	const std::string url = std::format("srt://127.0.0.1:{}?streamid={}", m_port, m_streamID);
+	const std::string url = std::format("srt://127.0.0.1:{}", m_port);
 	const int ret = avformat_open_input(&avFormatContext, url.c_str(), nullptr, &options);
 	av_dict_free(&options);
 
@@ -698,7 +699,39 @@ bool SRT_FrameReceiver::openStream() {
 
 	AVFormatContextPtr formatContext(avFormatContext);
 
-	if (avformat_find_stream_info(formatContext.get(), nullptr) < 0) {
+	std::string decoderWhitelist;
+	void *codecIterator = nullptr;
+
+	while (const AVCodec *codec = av_codec_iterate(&codecIterator)) {
+		if (av_codec_is_decoder(codec) && (codecAllowed(codec->id) || audioCodecAllowed(codec->id))) {
+			if (!decoderWhitelist.empty()) {
+				decoderWhitelist += ',';
+			}
+
+			decoderWhitelist += codec->name;
+		}
+	}
+
+	formatContext->codec_whitelist = av_strdup(decoderWhitelist.c_str());
+
+	if (!formatContext->codec_whitelist) {
+		return false;
+	}
+
+	std::vector<AVDictionary *> probeOptions(formatContext->nb_streams, nullptr);
+
+	for (AVDictionary *&streamOptions : probeOptions) {
+		av_dict_set_int(&streamOptions, "max_pixels", c_maxPixels, 0);
+	}
+
+	const int probeResult =
+		avformat_find_stream_info(formatContext.get(), probeOptions.empty() ? nullptr : probeOptions.data());
+
+	for (AVDictionary *&streamOptions : probeOptions) {
+		av_dict_free(&streamOptions);
+	}
+
+	if (probeResult < 0) {
 		obs_log(LOG_WARNING, "SRT_FrameReceiver: could not find stream info");
 		return false;
 	}

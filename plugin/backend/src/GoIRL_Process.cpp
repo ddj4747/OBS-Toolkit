@@ -48,6 +48,7 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 
 	if (m_localSrtPort == 0) {
 		obs_log(LOG_ERROR, "failed to allocate a local SRT port");
+		bfree(serverPath);
 		emit serverError(ServerError::FailedToStart);
 		return;
 	}
@@ -59,8 +60,7 @@ void GoIRL_Process::startServer(const std::string &streamKey) {
 	m_listening = false;
 	m_stderrBuffer.clear();
 
-	const std::filesystem::path path(serverPath);
-	const QString pathStr(path.string().data());
+	const QString pathStr = QString::fromUtf8(serverPath);
 	bfree(serverPath);
 
 	m_stopRequested = false;

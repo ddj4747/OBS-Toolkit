@@ -9,6 +9,7 @@
 #include <QUrl>
 #include <QVariant>
 #include <QByteArray>
+#include <QHostAddress>
 #include <QtNetwork/QNetworkReply>
 
 #include <algorithm>
@@ -190,7 +191,16 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Strea
 	QString publishUrl;
 	const QString mediaPath = pathName(streamId, protocol);
 	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(mediaPath));
-	const QString ipStr = obs_helpers::fromStdString(ip);
+	QHostAddress address;
+
+	if (!address.setAddress(obs_helpers::fromStdString(ip)) || !address.scopeId().isEmpty()) {
+		emit inputError(qname, QStringLiteral("Invalid public IP address"));
+		return;
+	}
+
+	const QString ipStr = address.protocol() == QAbstractSocket::IPv6Protocol
+				      ? QStringLiteral("[") + address.toString() + QStringLiteral("]")
+				      : address.toString();
 
 	switch (protocol) {
 	case StreamProtocol::RTSP:

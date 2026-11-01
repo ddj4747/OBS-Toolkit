@@ -1,6 +1,7 @@
 """Interactively send requests to the relay HTTPS API."""
 
 import json
+import http.client
 import ssl
 import threading
 import tkinter as tk
@@ -8,7 +9,7 @@ from tkinter import ttk
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from api_tester import format_body
+from api_tester import format_body, validate_connection
 
 
 PROTOCOLS = ("SRT", "SRTLA", "RTSP", "RTMP", "WebRTC", "MoQ")
@@ -29,7 +30,7 @@ def send_request(method, url, key, protocol, stream_key):
 			return response.status, response.read().decode("utf-8", errors="replace"), None
 	except HTTPError as error:
 		return error.code, error.read().decode("utf-8", errors="replace"), None
-	except (URLError, TimeoutError, OSError, ValueError) as error:
+	except (URLError, TimeoutError, OSError, ValueError, http.client.InvalidURL) as error:
 		return None, "", str(error.reason if isinstance(error, URLError) and error.reason else error)
 
 
@@ -89,6 +90,10 @@ class RelayApiTester(tk.Tk):
 	def send(self, method, path):
 		host = self.host.get().strip()
 		port = self.port.get().strip()
+		error = validate_connection(host, port)
+		if error:
+			self._show_result(method, "", None, "", error)
+			return
 		url = f"https://{host}:{port}{path}"
 		args = (method, url, self.access_key.get(), self.protocol.get(), self.stream_key.get())
 		self.status.set(f"Sending {method} {url}")

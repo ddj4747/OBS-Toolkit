@@ -6,6 +6,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/rand.h>
 #include <openssl/x509v3.h>
 
 #include <ctime>
@@ -14,6 +15,12 @@
 #include <iterator>
 #include <memory>
 #include <sstream>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#else
+#include <windows.h>
+#endif
 
 std::mutex CertificateManager::s_mutex;
 
@@ -34,7 +41,7 @@ std::string CertificateManager::displayPath(const std::filesystem::path &path) {
 	return {reinterpret_cast<const char *>(utf8.data()), utf8.size()};
 }
 
-bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &path) {
+bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &path, const bool privateKey) {
 	char *data = nullptr;
 	const long size = BIO_get_mem_data(bio, &data);
 	if (size < 0 || (size > 0 && !data)) {
@@ -52,6 +59,28 @@ bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &p
 		return false;
 	}
 
+#ifndef _WIN32
+	if (privateKey) {
+		const int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
+		if (fd < 0) {
+			return false;
+		}
+
+		long written = 0;
+		while (written < size) {
+			const ssize_t count = write(fd, data + written, static_cast<size_t>(size - written));
+
+			if (count <= 0) {
+				close(fd);
+				return false;
+			}
+
+			written += count;
+		}
+
+		return close(fd) == 0;
+	}
+#endif
 	std::ofstream file(path, std::ios::binary | std::ios::trunc);
 	if (!file) {
 		std::fprintf(stderr, "CertificateManager: failed to open '%s' for writing", displayPath(path).c_str());
@@ -59,6 +88,7 @@ bool CertificateManager::writeBioToFile(BIO *bio, const std::filesystem::path &p
 	}
 
 	file.write(data, size);
+	file.close();
 	if (!file) {
 		std::fprintf(stderr, "CertificateManager: failed to write '%s'", displayPath(path).c_str());
 		return false;
@@ -158,7 +188,42 @@ bool CertificateManager::generateCertificate(const std::filesystem::path &privat
 		return false;
 	}
 
-	return writeBioToFile(keyBio.get(), privateKeyPath) && writeBioToFile(certificateBio.get(), certificatePath);
+	unsigned char random[16];
+	if (RAND_bytes(random, sizeof(random)) != 1) {
+		return false;
+	}
+
+	const std::string suffix = ".tmp-" + toHex(random, sizeof(random));
+	std::filesystem::path temporaryKey = privateKeyPath;
+	std::filesystem::path temporaryCertificate = certificatePath;
+	temporaryKey += suffix;
+	temporaryCertificate += suffix;
+	const bool written = writeBioToFile(keyBio.get(), temporaryKey, true) &&
+			     writeBioToFile(certificateBio.get(), temporaryCertificate);
+	bool replaced = false;
+
+	if (written) {
+#ifdef _WIN32
+		replaced =
+			MoveFileExW(temporaryKey.c_str(), privateKeyPath.c_str(), MOVEFILE_REPLACE_EXISTING) &&
+			MoveFileExW(temporaryCertificate.c_str(), certificatePath.c_str(), MOVEFILE_REPLACE_EXISTING);
+#else
+		std::error_code error;
+		std::filesystem::rename(temporaryKey, privateKeyPath, error);
+
+		if (!error) {
+			std::filesystem::rename(temporaryCertificate, certificatePath, error);
+		}
+
+		replaced = !error;
+#endif
+	}
+
+	std::error_code ignored;
+	std::filesystem::remove(temporaryKey, ignored);
+	std::filesystem::remove(temporaryCertificate, ignored);
+
+	return replaced;
 }
 
 bool CertificateManager::isCertificateValid(const std::filesystem::path &certificatePath) {
@@ -193,6 +258,28 @@ bool CertificateManager::isPrivateKeyValid(const std::filesystem::path &privateK
 
 	const EvpPkeyPtr key(PEM_read_bio_PrivateKey(bio.get(), nullptr, nullptr, nullptr), EVP_PKEY_free);
 	return key != nullptr;
+}
+
+bool CertificateManager::keysMatch(const std::filesystem::path &privateKeyPath,
+				   const std::filesystem::path &certificatePath) {
+	std::lock_guard lock(s_mutex);
+
+	const X509Ptr certificate = readCertificate(certificatePath);
+	std::ifstream file(privateKeyPath, std::ios::binary);
+
+	if (!certificate || !file) {
+		return false;
+	}
+
+	const std::string contents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	const BioPtr bio(BIO_new_mem_buf(contents.data(), static_cast<int>(contents.size())), BIO_free);
+
+	if (!bio) {
+		return false;
+	}
+
+	const EvpPkeyPtr key(PEM_read_bio_PrivateKey(bio.get(), nullptr, nullptr, nullptr), EVP_PKEY_free);
+	return key && X509_check_private_key(certificate.get(), key.get()) == 1;
 }
 
 std::string CertificateManager::getCertificateFingerprint(const std::filesystem::path &certificatePath) {

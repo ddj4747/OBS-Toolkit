@@ -64,12 +64,12 @@ void on_frontend_event(const obs_frontend_event event, void *) {
 } // namespace
 
 bool obs_module_load(void) {
-	PluginSource::registerType();
-	PluginInfoSource::registerType();
-
 	if (!API_Endpoint::getInstance().start()) {
 		return false;
 	}
+
+	PluginSource::registerType();
+	PluginInfoSource::registerType();
 
 	obs_frontend_add_event_callback(on_frontend_event, nullptr);
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
@@ -84,8 +84,6 @@ void obs_module_unload(void) {
 	}
 
 	API_Endpoint::getInstance().stop();
-
-	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
 
 	EventManager::destroy();
 	obs_log(LOG_INFO, "plugin unloaded (version %s)", PLUGIN_VERSION);

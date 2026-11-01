@@ -5,6 +5,7 @@ The access key is sent as the Authorization header value.
 """
 
 import json
+import http.client
 import ssl
 import threading
 import tkinter as tk
@@ -49,6 +50,14 @@ def format_body(body):
 		return json.dumps(json.loads(body), indent=2)
 	except json.JSONDecodeError:
 		return body
+
+
+def validate_connection(host, port):
+	if not host:
+		return "Host is required"
+	if len(port) > 5 or not port.isascii() or not port.isdecimal() or not 1 <= int(port) <= 65535:
+		return "Port must be an integer from 1 to 65535"
+	return None
 
 
 class ApiTester(tk.Tk):
@@ -116,6 +125,10 @@ class ApiTester(tk.Tk):
 	def send(self, method, path):
 		host = self.host.get().strip()
 		port = self.port.get().strip()
+		error = validate_connection(host, port)
+		if error:
+			self._show_result(method, "", None, "", error)
+			return
 		key = self.access_key.get()
 		query = build_query(path, self.payload.get("1.0", "end-1c"))
 		url = f"https://{host}:{port}{path}"
@@ -128,8 +141,8 @@ class ApiTester(tk.Tk):
 
 	def _request(self, method, url, key):
 		context = ssl._create_unverified_context()
-		request = Request(url, method=method, headers={"Authorization": key})
 		try:
+			request = Request(url, method=method, headers={"Authorization": key})
 			with urlopen(request, context=context, timeout=5) as response:
 				body = response.read().decode("utf-8", errors="replace")
 				status = response.status
@@ -138,7 +151,7 @@ class ApiTester(tk.Tk):
 			status = caught.code
 			body = caught.read().decode("utf-8", errors="replace")
 			error = None
-		except (URLError, TimeoutError, OSError, ValueError) as caught:
+		except (URLError, TimeoutError, OSError, ValueError, http.client.InvalidURL) as caught:
 			status = None
 			body = ""
 			error = str(caught.reason if isinstance(caught, URLError) and caught.reason else caught)

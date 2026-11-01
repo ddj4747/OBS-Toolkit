@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 		if (parser.isSet(generateApiKey)) {
 			QTextStream(stdout) << key << Qt::endl;
 		} else {
-			QTextStream(stdout) << "Relay API key: " << key << Qt::endl;
+			QTextStream(stdout) << "Relay API key saved to " << configDirectory << "/api-key" << Qt::endl;
 		}
 	}
 

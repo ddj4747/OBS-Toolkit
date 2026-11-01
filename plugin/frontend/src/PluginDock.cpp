@@ -190,8 +190,29 @@ PluginDock::PluginDock(QWidget *parent)
 	obs_frontend_add_event_callback(onFrontendEvent, static_cast<void *>(this));
 
 	m_sourceModificationSignalKey = obs_helpers::connectSourceEditSignals([this](const calldata_t *cd) {
-		syncTrackedSourceNames(cd);
-		updateSourcesList();
+		const char *previous = cd ? calldata_string(cd, "prev_name") : nullptr;
+		const char *next = cd ? calldata_string(cd, "new_name") : nullptr;
+		const QString previousName = previous ? QString::fromUtf8(previous) : QString();
+		const QString nextName = next ? QString::fromUtf8(next) : QString();
+
+		QMetaObject::invokeMethod(
+			this,
+			[this, previousName, nextName] {
+				if (m_detached) {
+					return;
+				}
+
+				if (!previousName.isEmpty() && !nextName.isEmpty()) {
+					const qsizetype index = m_sourcesList.indexOf(previousName);
+
+					if (index >= 0) {
+						m_sourcesList[index] = nextName;
+					}
+				}
+
+				updateSourcesList();
+			},
+			Qt::QueuedConnection);
 	});
 
 	connect(m_statusRefreshTimer, &QTimer::timeout, this, [this] { updateStatusIcons(); });
@@ -214,6 +235,7 @@ void PluginDock::detach() {
 }
 
 void PluginDock::prepareForShutdown() {
+	updateSourcesList();
 	detach();
 	saveSourcesList();
 }
@@ -275,7 +297,12 @@ void PluginDock::updateSourcesList() {
 		const QString &source = m_sourcesList.at(i);
 		obs_source_t *sourcePtr = obs_get_source_by_name(source.toUtf8());
 
-		if (!sourcePtr) {
+		const char *id = sourcePtr ? obs_source_get_id(sourcePtr) : nullptr;
+		if (!sourcePtr || obs_source_removed(sourcePtr) || !id || strcmp(id, PluginSource::id()) != 0) {
+			if (sourcePtr) {
+				obs_source_release(sourcePtr);
+			}
+
 			m_sourcesList.removeAt(i);
 			i--;
 			continue;
@@ -375,6 +402,7 @@ void PluginDock::loadSourcesList() {
 	obs_data_t *settings = PluginFrontend::get()->getSettingsObject();
 	obs_data_array_t *obsArray = obs_data_get_array(settings, "sources");
 	if (!obsArray) {
+		updateSourcesList();
 		return;
 	}
 
@@ -429,14 +457,10 @@ void PluginDock::onMoveDownSourceClicked() {
 		selectedNames.append(item->text());
 	}
 
-	for (const QString &name : selectedNames) {
-		const qsizetype index = m_sourcesList.indexOf(name);
-		if (index < 0 || index >= m_sourcesList.size() - 1) {
-			continue;
+	for (qsizetype index = m_sourcesList.size() - 1; index > 0; --index) {
+		if (selectedNames.contains(m_sourcesList[index - 1]) && !selectedNames.contains(m_sourcesList[index])) {
+			m_sourcesList.swapItemsAt(index - 1, index);
 		}
-
-		m_sourcesList.swapItemsAt(index, index + 1);
-		break;
 	}
 
 	updateSourcesList();
@@ -470,14 +494,10 @@ void PluginDock::onMoveUpSourceClicked() {
 		selectedNames.append(item->text());
 	}
 
-	for (const QString &name : selectedNames) {
-		const qsizetype index = m_sourcesList.indexOf(name);
-		if (index <= 0) {
-			continue;
+	for (qsizetype index = 1; index < m_sourcesList.size(); ++index) {
+		if (selectedNames.contains(m_sourcesList[index]) && !selectedNames.contains(m_sourcesList[index - 1])) {
+			m_sourcesList.swapItemsAt(index, index - 1);
 		}
-
-		m_sourcesList.swapItemsAt(index, index - 1);
-		break;
 	}
 
 	updateSourcesList();

@@ -131,7 +131,7 @@ void PluginWebPanelWindow::applyNewUrl() const {
 	const QString ip = API_Endpoint::getInstance().getIp();
 	const QString port = QString::number(API_Endpoint::getInstance().getPort());
 	m_accessKeyEdit->setText(
-		QStringLiteral("https://place-holder.com?accessKey=%1,ip=%2,port=%3").arg(m_accessKey, ip, port));
+		QStringLiteral("obstoolkit://connect?accessKey=%1,ip=%2,port=%3").arg(m_accessKey, ip, port));
 }
 
 void PluginWebPanelWindow::refreshQrCode() {

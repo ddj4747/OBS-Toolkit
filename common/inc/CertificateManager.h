@@ -23,6 +23,8 @@ public:
 					const std::filesystem::path &certificatePath);
 	NO_DISCARD static bool isCertificateValid(const std::filesystem::path &certificatePath);
 	NO_DISCARD static bool isPrivateKeyValid(const std::filesystem::path &privateKeyPath);
+	NO_DISCARD static bool keysMatch(const std::filesystem::path &privateKeyPath,
+					 const std::filesystem::path &certificatePath);
 	NO_DISCARD static std::string getCertificateFingerprint(const std::filesystem::path &certificatePath);
 
 private:
@@ -40,7 +42,7 @@ private:
 
 	static std::string openSSLError();
 	static std::string displayPath(const std::filesystem::path &path);
-	static bool writeBioToFile(BIO *bio, const std::filesystem::path &path);
+	static bool writeBioToFile(BIO *bio, const std::filesystem::path &path, bool privateKey = false);
 	static X509Ptr readCertificate(const std::filesystem::path &path);
 	static bool setRandomSerialNumber(X509 *certificate);
 	static bool setSubjectAndIssuer(X509 *certificate);

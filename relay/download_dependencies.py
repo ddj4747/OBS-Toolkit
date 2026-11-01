@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 RELEASES = {
-    "go-irl": ("ddj4747/go-irl", "v1.1.1"),
+    "go-irl": ("ddj4747/go-irl", "v1.2.0"),
     "mediamtx": ("bluenviron/mediamtx", "v1.20.1"),
 }
 
@@ -46,8 +46,8 @@ def install_dependencies(destination, target_platform=None, architecture=None):
     arch = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}.get(machine)
     if target_platform == "win32":
         system, arch = "windows", "amd64"
-    elif target_platform == "darwin":
-        system, arch = "darwin", "arm64"
+    elif target_platform == "darwin" and arch:
+        system = "darwin"
     elif target_platform.startswith("linux") and arch:
         system = "linux"
     else:

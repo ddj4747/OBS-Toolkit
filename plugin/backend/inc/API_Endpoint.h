@@ -3,6 +3,7 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
 #include <functional>
+#include <atomic>
 #include <mutex>
 #include <thread>
 #include <httplib/httplib.h>
@@ -33,6 +34,8 @@ private:
 	bool authorize(const httplib::Request &req, httplib::Response &res) const;
 
 	std::thread m_httpThread;
+	std::atomic<bool> m_stopping{false};
+	std::atomic<bool> m_httpExited{true};
 	std::unique_ptr<httplib::SSLServer> m_server;
 	mutable std::mutex m_authMutex;
 	std::string m_accessKey{};

@@ -102,11 +102,16 @@ void PluginInfoSource::createTextSource() {
 	obs_data_t *settings = obs_data_create();
 	obs_data_set_string(settings, "text", "");
 	obs_data_set_bool(settings, "antialiasing", true);
-	m_textSource = obs_source_create_private("text_gdiplus", "info-text", settings);
+#ifdef _WIN32
+	const char *textSourceId = "text_gdiplus";
+#else
+	const char *textSourceId = "text_ft2_source";
+#endif
+	m_textSource = obs_source_create_private(textSourceId, "info-text", settings);
 	obs_data_release(settings);
 
 	if (!m_textSource) {
-		obs_log(LOG_ERROR, "Failed to create text_gdiplus source");
+		obs_log(LOG_ERROR, "Failed to create %s source", textSourceId);
 		return;
 	}
 
