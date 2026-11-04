@@ -15,7 +15,7 @@
 #define NO_DISCARD [[nodiscard]]
 #endif
 
-enum class StreamProtocol : uint8_t { MoQ, SRT, WebRTC, RTSP, RTMP, HLS, MPEGTS, RTP, SRTLA };
+enum class StreamProtocol : uint8_t { MoQ, SRT, WebRTC, RTSP, RTMP, MPEGTS, RTP, SRTLA, Pull };
 
 class MediamtxManager final : public QObject {
 	Q_OBJECT
@@ -30,10 +30,13 @@ public:
 	MediamtxManager &operator=(MediamtxManager &&) = delete;
 	~MediamtxManager() override;
 
+	static bool supportedPullUrl(const QString &url);
+
 	void startServer();
 	void stopServer();
 	NO_DISCARD bool running() const;
 	NO_DISCARD bool ready() const;
+
 	void addInput(const std::string &streamId, StreamProtocol protocol, const std::string &ip);
 	void removeInput(const std::string &streamId, StreamProtocol protocol);
 
@@ -49,9 +52,10 @@ signals:
 
 private:
 	struct PendingInput {
-		std::string streamId;
-		StreamProtocol protocol;
-		std::string ip;
+		std::string url{};
+		std::string streamId{};
+		StreamProtocol protocol{};
+		std::string ip{};
 	};
 
 	void onProcessStarted();

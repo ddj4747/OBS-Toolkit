@@ -25,8 +25,7 @@ MediamtxStreamHandler::MediamtxStreamHandler(QObject *parent) : StreamHandler(pa
 				 if (streamId != obs_helpers::fromStdString(m_streamId)) {
 					 return;
 				 }
-				 obs_log(LOG_INFO, "mediamtx input '%s' added: %s", qUtf8Printable(streamId),
-					 qUtf8Printable(publishUrl));
+				 obs_log(LOG_INFO, "mediamtx input '%s' added", qUtf8Printable(streamId));
 				 emit streamReady(streamId, publishUrl);
 			 });
 	QObject::connect(m_manager, &MediamtxManager::inputAvailable, this, [this](const QString &streamId) {

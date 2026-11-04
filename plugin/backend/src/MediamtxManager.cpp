@@ -153,16 +153,25 @@ void MediamtxManager::cleanupProcess() {
 	m_inputs.clear();
 }
 
+bool MediamtxManager::supportedPullUrl(const QString &value) {
+	const QUrl url(value.trimmed(), QUrl::StrictMode);
+	const QString scheme = url.scheme().toLower();
+	static const QStringList schemes = {"rtsp", "rtsps", "rtsp+http",  "rtsps+http", "rtsp+ws", "rtsps+ws",
+					    "rtmp", "rtmps", "http",       "https",      "srt",     "moqt",
+					    "whep", "wheps", "udp+mpegts", "udp+rtp"};
+	return url.isValid() && !url.host().isEmpty() && schemes.contains(scheme);
+}
+
 void MediamtxManager::addInput(const std::string &streamId, const StreamProtocol protocol, const std::string &ip) {
 	const QString qname = obs_helpers::fromStdString(streamId);
 	if (!running()) {
-		m_pendingInputs.push_back({streamId, protocol, ip});
+		m_pendingInputs.push_back({"", streamId, protocol, ip});
 		startServer();
 		return;
 	}
 
 	if (!ready()) {
-		m_pendingInputs.push_back({streamId, protocol, ip});
+		m_pendingInputs.push_back({"", streamId, protocol, ip});
 		return;
 	}
 
@@ -186,41 +195,52 @@ void MediamtxManager::addInputWhenReady(const std::string &streamId, const Strea
 					const std::string &ip) {
 	const QString qname = obs_helpers::fromStdString(streamId);
 	QJsonObject body;
-	body["source"] = "publisher";
+	body["source"] = protocol == StreamProtocol::Pull ? obs_helpers::fromStdString(ip)
+							  : QStringLiteral("publisher");
 
 	QString publishUrl;
 	const QString mediaPath = pathName(streamId, protocol);
 	const QString encodedPathName = QString::fromLatin1(QUrl::toPercentEncoding(mediaPath));
-	QHostAddress address;
+	if (protocol == StreamProtocol::Pull) {
+		obs_log(LOG_INFO, "Adding MediaMTX pull path '%s'", qUtf8Printable(qname));
+		publishUrl = obs_helpers::fromStdString(ip);
+		if (!supportedPullUrl(publishUrl)) {
+			emit inputError(qname, QStringLiteral("Unsupported or invalid pull URL"));
+			return;
+		}
+		body["sourceOnDemand"] = false;
+	} else {
+		QHostAddress address;
 
-	if (!address.setAddress(obs_helpers::fromStdString(ip)) || !address.scopeId().isEmpty()) {
-		emit inputError(qname, QStringLiteral("Invalid public IP address"));
-		return;
-	}
+		if (!address.setAddress(obs_helpers::fromStdString(ip)) || !address.scopeId().isEmpty()) {
+			emit inputError(qname, QStringLiteral("Invalid public IP address"));
+			return;
+		}
 
-	const QString ipStr = address.protocol() == QAbstractSocket::IPv6Protocol
-				      ? QStringLiteral("[") + address.toString() + QStringLiteral("]")
-				      : address.toString();
+		const QString ipStr = address.protocol() == QAbstractSocket::IPv6Protocol
+					      ? QStringLiteral("[") + address.toString() + QStringLiteral("]")
+					      : address.toString();
 
-	switch (protocol) {
-	case StreamProtocol::RTSP:
-		publishUrl = QString("rtsp://%1:8554/%2").arg(ipStr).arg(mediaPath);
-		break;
-	case StreamProtocol::RTMP:
-		publishUrl = QString("rtmp://%1:1935/%2").arg(ipStr).arg(mediaPath);
-		break;
-	case StreamProtocol::SRT:
-		publishUrl = QString("srt://%1:8890?streamid=publish:%2").arg(ipStr).arg(encodedPathName);
-		break;
-	case StreamProtocol::WebRTC:
-		publishUrl = QString("http://%1:8889/%2/whip").arg(ipStr).arg(mediaPath);
-		break;
-	case StreamProtocol::MoQ:
-		publishUrl = QString("https://%1:8892/%2/publish").arg(ipStr).arg(mediaPath);
-		break;
-	default:
-		emit inputError(qname, QStringLiteral("Unsupported protocol"));
-		return;
+		switch (protocol) {
+		case StreamProtocol::RTSP:
+			publishUrl = QString("rtsp://%1:8554/%2").arg(ipStr).arg(mediaPath);
+			break;
+		case StreamProtocol::RTMP:
+			publishUrl = QString("rtmp://%1:1935/%2").arg(ipStr).arg(mediaPath);
+			break;
+		case StreamProtocol::SRT:
+			publishUrl = QString("srt://%1:8890?streamid=publish:%2").arg(ipStr).arg(encodedPathName);
+			break;
+		case StreamProtocol::WebRTC:
+			publishUrl = QString("http://%1:8889/%2/whip").arg(ipStr).arg(mediaPath);
+			break;
+		case StreamProtocol::MoQ:
+			publishUrl = QString("https://%1:8892/%2/publish").arg(ipStr).arg(mediaPath);
+			break;
+		default:
+			emit inputError(qname, QStringLiteral("Unsupported protocol"));
+			return;
+		}
 	}
 
 	const QUrl requestUrl = QString("http://127.0.0.1:9997/v3/config/paths/add/%1").arg(encodedPathName);
@@ -302,6 +322,8 @@ void MediamtxManager::pollInputAvailability() {
 			const bool available = reply->error() == QNetworkReply::NoError && status["available"].toBool();
 			if (available != input->second.second) {
 				input->second.second = available;
+				obs_log(LOG_INFO, "MediaMTX path '%s' is %s", streamId.c_str(),
+					available ? "available" : "unavailable");
 				emit available ? inputAvailable(obs_helpers::fromStdString(streamId))
 					       : inputUnavailable(obs_helpers::fromStdString(streamId));
 			}
